@@ -1,24 +1,26 @@
 import streamlit as st
 import pandas as pd
 import requests
-import time
 
 # --- ページ設定 ---
 st.set_page_config(page_title="Rakuten Intelligence", layout="wide")
 
-# --- 楽天API 接続関数 (Signature認証対応版) ---
 def fetch_rakuten_data(keyword):
-    # Secretsから「表示されているID」と「キー」を取得
+    # Secretsから画面上のIDとキーを取得
+    # ID: 1d63949f-... / Secret: pk_VDqp...
     app_id = st.secrets["RAKUTEN_APP_ID"]
     app_secret = st.secrets["RAKUTEN_APPLICATION_SECRET"]
 
+    # エンドポイントの確認（通常の商品検索API）
     url = "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601"
     
-    # ご指摘の通り、IDをapplicationIdとして、
-    # もし認証エラーが出る場合は、paramsにapplicationIdとシークレットを直接含めます
+    # 💡 重要なポイント：
+    # 楽天の新しいUIで発行されたIDを使う場合、
+    # 'applicationId' だけでなく 'application_id' や 
+    # ヘッダーでの認証が必要なケースがありますが、まずは以下の標準形式で試します。
     params = {
         "applicationId": app_id,
-        "applicationSecret": app_secret, # アクセスキーをここで利用
+        "applicationSecret": app_secret,
         "keyword": keyword,
         "format": "json",
         "hits": 20,
@@ -28,8 +30,11 @@ def fetch_rakuten_data(keyword):
         response = requests.get(url, params=params)
         res = response.json()
         
+        # エラー詳細の表示
         if "error" in res:
-            st.error(f"APIエラーメッセージ: {res.get('error_description', res['error'])}")
+            st.error(f"詳細エラー: {res.get('error_description', res['error'])}")
+            # デバッグ用：送っているIDの先頭を表示
+            st.write(f"送信中ID: {app_id[:5]}...") 
             return pd.DataFrame()
             
         items = []
@@ -43,10 +48,10 @@ def fetch_rakuten_data(keyword):
                 })
         return pd.DataFrame(items)
     except Exception as e:
-        st.error(f"システムエラー: {e}")
+        st.error(f"接続エラー: {e}")
         return pd.DataFrame()
 
-# --- メイン画面 ---
+# --- UI ---
 st.title("⚡ RAKUTEN INTELLIGENCE")
 
 with st.sidebar:
