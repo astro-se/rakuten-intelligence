@@ -18,11 +18,11 @@ st.markdown("""
 
 # --- 2. 楽天API 連携関数 ---
 def fetch_rakuten_data(keyword):
-    # SecretsからIDを取得
     try:
+        # Secretsから取得できているかチェック
         app_id = st.secrets["RAKUTEN_APP_ID"]
-    except:
-        st.error("Secretsに RAKUTEN_APP_ID が設定されていません。")
+    except Exception as e:
+        st.error(f"Secretsエラー: {e}")
         return pd.DataFrame()
 
     url = "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601"
@@ -30,21 +30,27 @@ def fetch_rakuten_data(keyword):
         "applicationId": app_id,
         "keyword": keyword,
         "format": "json",
-        "hits": 30,
-        "sort": "-itemPrice"
+        "hits": 10,  # 最初は少なめでテスト
+        "sort": "standard", # 並び替えを標準に戻す
     }
     
-    res = requests.get(url, params=params).json()
+    response = requests.get(url, params=params)
+    res = response.json()
+    
+    # 💡 ここが重要：エラーが出ている場合、その内容を画面に出す
+    if "error" in res:
+        st.error(f"楽天APIエラー: {res['error_description']}")
+        return pd.DataFrame()
+    
+    # 中身があるか確認
     items = []
     if "Items" in res:
         for i in res["Items"]:
             item = i["Item"]
             items.append({
-                "商品名": item["itemName"][:50] + "...",
+                "商品名": item["itemName"][:50],
                 "価格": item["itemPrice"],
-                "店舗名": item["shopName"],
-                "レビュー": item.get("reviewAverage", 0),
-                "ポイント倍率": item.get("pointRate", 1)
+                "店舗名": item["shopName"]
             })
     return pd.DataFrame(items)
 
