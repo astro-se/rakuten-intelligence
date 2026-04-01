@@ -1,39 +1,21 @@
 
+import io
 import math
-import time
-from typing import Any, Dict, List, Optional, Tuple
+from pathlib import Path
+from typing import Dict, Optional
 
 import numpy as np
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
 import requests
 import streamlit as st
 
 
 st.set_page_config(
-    page_title="ASTRO Market Intelligence",
+    page_title="ASTRO RMS 2.0 Console",
     layout="wide",
-    page_icon="🛰️",
+    page_icon="▣",
     initial_sidebar_state="expanded",
-)
-
-PUBLIC_ITEM_SEARCH_URL = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601"
-
-DEFAULT_ELEMENTS = ",".join(
-    [
-        "itemName",
-        "itemPrice",
-        "shopName",
-        "shopCode",
-        "genreId",
-        "itemUrl",
-        "mediumImageUrls",
-        "availability",
-        "reviewCount",
-        "reviewAverage",
-        "postageFlag",
-    ]
 )
 
 
@@ -41,267 +23,266 @@ def inject_css() -> None:
     st.markdown(
         """
         <style>
-        :root {
-            --bg: #070b13;
-            --panel: rgba(10, 16, 28, 0.78);
-            --panel-strong: rgba(14, 22, 38, 0.92);
-            --line: rgba(132, 160, 255, 0.18);
-            --text: #e8eefb;
-            --muted: #8fa3c8;
-            --accent: #78b4ff;
-            --accent-2: #41ffd6;
-            --warn: #ffc857;
-            --danger: #ff6b6b;
+        :root{
+            --bg:#0a0d12;
+            --panel:#12171f;
+            --panel2:#171d27;
+            --line:#2c3442;
+            --soft:#7e8795;
+            --text:#e8edf4;
+            --white:#ffffff;
+            --accent:#d4d9df;
+            --good:#c7d2bf;
+            --warn:#d5c7a1;
+            --bad:#d1b3b3;
         }
 
         html, body, [class*="css"]  {
-            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            font-family: "Inter", "SF Pro Display", "Segoe UI", sans-serif;
         }
 
         .stApp {
             background:
-                radial-gradient(circle at 15% 20%, rgba(62, 106, 214, 0.18), transparent 25%),
-                radial-gradient(circle at 85% 10%, rgba(0, 255, 214, 0.08), transparent 22%),
-                radial-gradient(circle at 50% 95%, rgba(120, 180, 255, 0.10), transparent 30%),
-                linear-gradient(180deg, #04070d 0%, #07101b 52%, #050811 100%);
+                linear-gradient(180deg, #080a0f 0%, #0a0d12 100%);
             color: var(--text);
         }
 
         .block-container {
-            padding-top: 1.2rem;
+            max-width: 1520px;
+            padding-top: 1.1rem;
             padding-bottom: 2rem;
-            max-width: 1500px;
         }
 
-        section[data-testid="stSidebar"] {
-            background:
-                linear-gradient(180deg, rgba(9,15,26,0.97), rgba(6,10,18,0.97));
+        section[data-testid="stSidebar"]{
+            background: linear-gradient(180deg, #0d1118 0%, #0a0d12 100%);
             border-right: 1px solid var(--line);
         }
 
-        .mission-hero {
-            position: relative;
-            overflow: hidden;
+        .hero {
             border: 1px solid var(--line);
-            border-radius: 24px;
-            padding: 28px 30px 26px 30px;
             background:
-                linear-gradient(135deg, rgba(12,22,38,0.96), rgba(7,12,22,0.88));
-            box-shadow: 0 14px 40px rgba(0, 0, 0, 0.30);
-            margin-bottom: 18px;
+                linear-gradient(180deg, rgba(23,29,39,0.96), rgba(13,17,24,0.96));
+            border-radius: 6px;
+            padding: 26px 28px 22px 28px;
+            margin-bottom: 16px;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
         }
 
-        .mission-hero:before {
-            content: "";
-            position: absolute;
-            inset: 0;
-            background:
-                radial-gradient(circle at 80% 20%, rgba(120, 180, 255, 0.15), transparent 20%),
-                linear-gradient(90deg, transparent 0%, rgba(120,180,255,0.03) 50%, transparent 100%);
-            pointer-events: none;
+        .hero-top {
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            margin-bottom:14px;
         }
 
-        .eyebrow {
-            color: var(--accent-2);
-            font-size: 12px;
-            letter-spacing: 0.22em;
-            text-transform: uppercase;
-            margin-bottom: 10px;
-            font-weight: 700;
+        .hero-badge {
+            display:inline-block;
+            border:1px solid #3b4554;
+            color:#cfd6df;
+            font-size:11px;
+            padding:6px 10px;
+            border-radius:3px;
+            letter-spacing:0.14em;
+            text-transform:uppercase;
+        }
+
+        .hero-grid {
+            display:grid;
+            grid-template-columns: 1.3fr 0.9fr;
+            gap:18px;
+            align-items:start;
         }
 
         .hero-title {
-            color: white;
-            font-size: 34px;
-            line-height: 1.05;
-            font-weight: 800;
-            margin: 0 0 10px 0;
+            font-size:34px;
+            line-height:1.08;
+            font-weight:800;
+            letter-spacing:0.01em;
+            color:var(--white);
+            margin:0 0 10px 0;
         }
 
         .hero-sub {
-            color: var(--muted);
-            font-size: 14px;
-            line-height: 1.8;
-            max-width: 980px;
-            margin-bottom: 0;
+            font-size:14px;
+            color:#a8b1bd;
+            line-height:1.75;
+            max-width:900px;
         }
 
-        .glass-card {
-            border: 1px solid var(--line);
-            border-radius: 22px;
-            background: linear-gradient(180deg, rgba(13,19,32,0.90), rgba(8,12,22,0.80));
-            padding: 18px 18px 16px 18px;
-            box-shadow: 0 10px 28px rgba(0,0,0,0.22);
+        .hero-plate {
+            border:1px solid var(--line);
+            background:rgba(6,8,12,0.34);
+            padding:14px 16px;
+            border-radius:4px;
         }
 
-        .metric-card {
-            border: 1px solid var(--line);
-            border-radius: 20px;
-            background: linear-gradient(180deg, rgba(13,21,36,0.88), rgba(8,12,20,0.84));
-            padding: 16px 18px;
-            min-height: 124px;
+        .plate-label {
+            font-size:10px;
+            text-transform:uppercase;
+            letter-spacing:0.18em;
+            color:#8d97a5;
+            margin-bottom:8px;
+        }
+
+        .plate-body {
+            font-size:13px;
+            line-height:1.65;
+            color:#d7dde6;
+        }
+
+        .metric {
+            border:1px solid var(--line);
+            background:linear-gradient(180deg, #151b23 0%, #10151c 100%);
+            border-radius:4px;
+            padding:16px 16px 14px 16px;
+            min-height:116px;
         }
 
         .metric-label {
-            color: var(--muted);
-            font-size: 11px;
-            letter-spacing: 0.18em;
-            text-transform: uppercase;
-            font-weight: 700;
-            margin-bottom: 12px;
+            font-size:10px;
+            text-transform:uppercase;
+            letter-spacing:0.18em;
+            color:#8d97a5;
+            margin-bottom:12px;
         }
 
         .metric-value {
-            color: #ffffff;
-            font-size: 28px;
-            font-weight: 800;
-            line-height: 1.1;
-            margin-bottom: 8px;
+            font-size:30px;
+            line-height:1;
+            font-weight:800;
+            color:#ffffff;
+            margin-bottom:8px;
         }
 
         .metric-foot {
-            color: var(--muted);
-            font-size: 13px;
-            line-height: 1.5;
+            font-size:12px;
+            line-height:1.6;
+            color:#a5afbb;
         }
 
-        .signal-card {
-            border: 1px solid var(--line);
-            border-left: 3px solid var(--accent);
-            border-radius: 18px;
-            background: rgba(13, 19, 32, 0.82);
-            padding: 14px 16px;
-            margin-bottom: 12px;
-        }
-
-        .signal-title {
-            color: #ffffff;
-            font-weight: 700;
-            margin-bottom: 6px;
-            font-size: 15px;
-        }
-
-        .signal-body {
-            color: var(--muted);
-            font-size: 13px;
-            line-height: 1.65;
-        }
-
-        .tag-row {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-            margin-top: 14px;
-        }
-
-        .tag {
-            font-size: 11px;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            color: #d8e4ff;
-            padding: 7px 10px;
-            border-radius: 999px;
-            border: 1px solid rgba(120,180,255,0.16);
-            background: rgba(120,180,255,0.08);
-        }
-
-        .action-card {
-            border: 1px solid var(--line);
-            border-radius: 22px;
-            background: linear-gradient(180deg, rgba(17,24,40,0.92), rgba(9,14,24,0.86));
-            padding: 18px;
-            min-height: 200px;
-        }
-
-        .action-priority {
-            display: inline-block;
-            padding: 6px 10px;
-            border-radius: 999px;
-            font-size: 11px;
-            letter-spacing: 0.16em;
-            text-transform: uppercase;
-            font-weight: 800;
-            margin-bottom: 14px;
-        }
-
-        .priority-high {
-            background: rgba(255,107,107,0.12);
-            color: #ff9f9f;
-            border: 1px solid rgba(255,107,107,0.24);
-        }
-
-        .priority-mid {
-            background: rgba(255,200,87,0.12);
-            color: #ffd98a;
-            border: 1px solid rgba(255,200,87,0.24);
-        }
-
-        .priority-low {
-            background: rgba(65,255,214,0.10);
-            color: #8fffe8;
-            border: 1px solid rgba(65,255,214,0.22);
-        }
-
-        .action-title {
-            color: white;
-            font-size: 18px;
-            font-weight: 800;
-            line-height: 1.35;
-            margin-bottom: 10px;
-        }
-
-        .action-body {
-            color: var(--muted);
-            font-size: 13px;
-            line-height: 1.7;
-            margin-bottom: 12px;
-        }
-
-        .action-next {
-            color: #d9e8ff;
-            font-size: 13px;
-            line-height: 1.7;
-            border-top: 1px solid rgba(132,160,255,0.14);
-            padding-top: 12px;
-        }
-
-        .tiny-note {
-            color: var(--muted);
-            font-size: 12px;
-            line-height: 1.6;
-        }
-
-        div[data-baseweb="tab-list"] {
-            gap: 10px;
-            margin-top: 6px;
-        }
-
-        button[data-baseweb="tab"] {
-            background: rgba(9, 14, 24, 0.72);
-            border: 1px solid var(--line);
-            border-radius: 14px;
-            color: #d9e8ff;
-            padding: 10px 16px;
-        }
-
-        button[data-baseweb="tab"][aria-selected="true"] {
-            background: rgba(120,180,255,0.10);
-            border-color: rgba(120,180,255,0.26);
-        }
-
-        .stDownloadButton button, .stButton button {
-            border-radius: 14px;
-            border: 1px solid rgba(120,180,255,0.18);
-            background: linear-gradient(180deg, rgba(18,30,52,1), rgba(10,18,32,1));
-            color: white;
-            font-weight: 700;
+        .section {
+            border:1px solid var(--line);
+            background:linear-gradient(180deg, #131821 0%, #0f141b 100%);
+            border-radius:6px;
+            padding:16px 16px 14px 16px;
         }
 
         .section-title {
-            font-size: 16px;
-            color: white;
-            font-weight: 800;
-            margin-bottom: 10px;
+            color:#ffffff;
+            font-size:14px;
+            font-weight:800;
+            text-transform:uppercase;
+            letter-spacing:0.12em;
+            margin-bottom:14px;
+        }
+
+        .action-box {
+            border:1px solid var(--line);
+            background:#0f141a;
+            border-left:3px solid #7d8898;
+            padding:14px 14px 13px 14px;
+            border-radius:3px;
+            min-height:176px;
+        }
+
+        .action-priority {
+            display:inline-block;
+            border:1px solid #404958;
+            padding:5px 8px;
+            border-radius:3px;
+            font-size:10px;
+            text-transform:uppercase;
+            letter-spacing:0.16em;
+            color:#dde3ea;
+            margin-bottom:12px;
+        }
+
+        .action-title {
+            color:#ffffff;
+            font-size:16px;
+            font-weight:800;
+            line-height:1.35;
+            margin-bottom:8px;
+        }
+
+        .action-body {
+            color:#aeb7c3;
+            font-size:13px;
+            line-height:1.7;
+            margin-bottom:10px;
+        }
+
+        .action-next {
+            color:#dce3eb;
+            font-size:12px;
+            line-height:1.7;
+            padding-top:10px;
+            border-top:1px solid #252d39;
+        }
+
+        .signal-line {
+            border-bottom:1px solid #252d39;
+            padding:10px 0;
+        }
+
+        .signal-line:last-child { border-bottom:none; }
+
+        .signal-name {
+            font-size:11px;
+            color:#8f99a7;
+            text-transform:uppercase;
+            letter-spacing:0.16em;
+            margin-bottom:4px;
+        }
+
+        .signal-value {
+            color:#ffffff;
+            font-weight:700;
+            font-size:16px;
+            margin-bottom:4px;
+        }
+
+        .signal-note {
+            color:#a9b3bf;
+            font-size:12px;
+            line-height:1.6;
+        }
+
+        .small-note {
+            color:#8f99a7;
+            font-size:12px;
+            line-height:1.7;
+        }
+
+        div[data-baseweb="tab-list"]{
+            gap:8px;
+            margin-top:2px;
+            margin-bottom:4px;
+        }
+
+        button[data-baseweb="tab"]{
+            border-radius:3px;
+            border:1px solid var(--line);
+            background:#10151c;
+            color:#d5dce5;
+            padding:10px 14px;
+        }
+
+        button[data-baseweb="tab"][aria-selected="true"]{
+            background:#171d26;
+            border-color:#434d5d;
+        }
+
+        .stButton button, .stDownloadButton button {
+            border-radius:3px;
+            background:#161c24;
+            color:#ffffff;
+            border:1px solid #394350;
+            font-weight:700;
+        }
+
+        .stDataFrame, div[data-testid="stMetric"]{
+            border-radius:4px;
         }
         </style>
         """,
@@ -309,792 +290,412 @@ def inject_css() -> None:
     )
 
 
-def get_secret(name: str, default: Optional[str] = None) -> Optional[str]:
-    try:
-        return st.secrets[name]
-    except Exception:
-        return default
+def fmt_yen(v) -> str:
+    if v is None or (isinstance(v, float) and math.isnan(v)):
+        return "-"
+    return f"¥{int(round(v)):,}"
 
 
-def build_headers(access_key: str, allowed_origin: str) -> Dict[str, str]:
-    headers = {
-        "User-Agent": "ASTRO-Market-Intelligence/2.0",
-        "Accept": "application/json",
-        "accessKey": access_key,
-    }
-    allowed_origin = (allowed_origin or "").strip()
-    if allowed_origin:
-        headers["Origin"] = allowed_origin
-        headers["Referer"] = f"{allowed_origin.rstrip('/')}/"
-    return headers
+def fmt_pct(v) -> str:
+    if v is None or (isinstance(v, float) and math.isnan(v)):
+        return "-"
+    return f"{v*100:.1f}%"
 
 
-def request_json(
-    url: str,
-    application_id: str,
-    access_key: str,
-    allowed_origin: str,
-    params: Dict[str, Any],
-    timeout: int = 20,
-) -> Dict[str, Any]:
-    final_params = {"format": "json", "applicationId": application_id, **params}
-    response = requests.get(
-        url,
-        params=final_params,
-        headers=build_headers(access_key, allowed_origin),
-        timeout=timeout,
+def load_csv_from_url(url: str) -> pd.DataFrame:
+    text = requests.get(url, timeout=20).text
+    return pd.read_csv(io.StringIO(text))
+
+
+def load_source(sheet_url: str, uploaded_file, fallback_df: pd.DataFrame) -> pd.DataFrame:
+    if uploaded_file is not None:
+        return pd.read_csv(uploaded_file)
+    if sheet_url.strip():
+        try:
+            return load_csv_from_url(sheet_url.strip())
+        except Exception:
+            return fallback_df.copy()
+    return fallback_df.copy()
+
+
+def demo_price_table() -> pd.DataFrame:
+    return pd.DataFrame([
+        {"sku":"AST-1001","product_name":"収納ケース M","current_price":2480,"cost":1180,"sessions":940,"orders":34,"units":36,"revenue":89280,"gross_profit":46800,"stock":84},
+        {"sku":"AST-1002","product_name":"収納ケース L","current_price":2980,"cost":1510,"sessions":880,"orders":27,"units":28,"revenue":83440,"gross_profit":41160,"stock":62},
+        {"sku":"AST-2101","product_name":"衣類収納ボックス","current_price":2180,"cost":980,"sessions":1260,"orders":51,"units":54,"revenue":117720,"gross_profit":64800,"stock":107},
+        {"sku":"AST-2204","product_name":"布団圧縮収納","current_price":3480,"cost":1810,"sessions":610,"orders":19,"units":19,"revenue":66120,"gross_profit":31730,"stock":33},
+        {"sku":"AST-3102","product_name":"キッチンラック","current_price":4280,"cost":2360,"sessions":430,"orders":11,"units":11,"revenue":47080,"gross_profit":21120,"stock":41},
+        {"sku":"AST-4105","product_name":"防災トイレセット","current_price":1980,"cost":790,"sessions":1480,"orders":67,"units":74,"revenue":146520,"gross_profit":88060,"stock":210},
+    ])
+
+
+def demo_market_table() -> pd.DataFrame:
+    return pd.DataFrame([
+        {"sku":"AST-1001","equilibrium_price":2380,"market_low":2280,"market_high":2480,"elasticity_proxy":-0.92,"competition_density":0.84},
+        {"sku":"AST-1002","equilibrium_price":2890,"market_low":2780,"market_high":2980,"elasticity_proxy":-0.76,"competition_density":0.72},
+        {"sku":"AST-2101","equilibrium_price":2090,"market_low":1980,"market_high":2180,"elasticity_proxy":-1.04,"competition_density":0.89},
+        {"sku":"AST-2204","equilibrium_price":3320,"market_low":3180,"market_high":3480,"elasticity_proxy":-0.61,"competition_density":0.58},
+        {"sku":"AST-3102","equilibrium_price":4390,"market_low":4180,"market_high":4580,"elasticity_proxy":-0.38,"competition_density":0.49},
+        {"sku":"AST-4105","equilibrium_price":2050,"market_low":1980,"market_high":2180,"elasticity_proxy":-1.12,"competition_density":0.93},
+    ])
+
+
+def build_recommendation_table(price_df: pd.DataFrame, market_df: pd.DataFrame) -> pd.DataFrame:
+    df = price_df.merge(market_df, on="sku", how="left")
+
+    df["cvr"] = np.where(df["sessions"] > 0, df["orders"] / df["sessions"], 0)
+    df["units_per_order"] = np.where(df["orders"] > 0, df["units"] / df["orders"], 1)
+    df["margin_per_unit"] = df["current_price"] - df["cost"]
+    df["gross_margin_rate"] = np.where(df["current_price"] > 0, df["margin_per_unit"] / df["current_price"], 0)
+
+    market_anchor = (
+        df["equilibrium_price"].fillna(df["current_price"]) * 0.60
+        + df["market_low"].fillna(df["current_price"]) * 0.10
+        + df["market_high"].fillna(df["current_price"]) * 0.10
+        + df["current_price"] * 0.20
     )
-    response.raise_for_status()
-    payload = response.json()
-    if isinstance(payload, dict) and payload.get("error"):
-        raise RuntimeError(f"{payload.get('error')} / {payload.get('error_description', 'unknown error')}")
-    return payload
 
+    elasticity_adj = np.where(
+        df["elasticity_proxy"].fillna(-0.5) <= -0.9,
+        -0.03 * df["current_price"],
+        np.where(df["elasticity_proxy"].fillna(-0.5) >= -0.45, 0.02 * df["current_price"], 0)
+    )
 
-@st.cache_data(ttl=1800, show_spinner=False)
-def fetch_search_page(
-    application_id: str,
-    access_key: str,
-    allowed_origin: str,
-    keyword: str,
-    page: int,
-    hits: int,
-    sort: str,
-    api_shop_code: str,
-    genre_id: str,
-    min_price: int,
-    max_price: int,
-    availability_only: bool,
-) -> Dict[str, Any]:
-    params: Dict[str, Any] = {
-        "keyword": keyword,
-        "page": page,
-        "hits": hits,
-        "sort": sort,
-        "formatVersion": 2,
-        "elements": DEFAULT_ELEMENTS,
-    }
-    if api_shop_code:
-        params["shopCode"] = api_shop_code
-    if genre_id:
-        params["genreId"] = genre_id
-    if min_price > 0:
-        params["minPrice"] = min_price
-    if max_price > 0:
-        params["maxPrice"] = max_price
-    if availability_only:
-        params["availability"] = 1
+    stock_adj = np.where(df["stock"] < 40, 0.03 * df["current_price"], np.where(df["stock"] > 120, -0.02 * df["current_price"], 0))
+    margin_floor = df["cost"] / 0.62
 
-    return request_json(PUBLIC_ITEM_SEARCH_URL, application_id, access_key, allowed_origin, params)
+    raw_recommended = market_anchor + elasticity_adj + stock_adj
+    df["recommended_price"] = np.maximum(raw_recommended, margin_floor).round(-1)
 
+    df["price_delta"] = df["recommended_price"] - df["current_price"]
+    df["price_delta_pct"] = np.where(df["current_price"] > 0, df["price_delta"] / df["current_price"], 0)
 
-def build_price_band(price_series: pd.Series) -> pd.Series:
-    if price_series.empty:
-        return pd.Series(dtype="object")
+    df["recommendation_reason"] = np.select(
+        [
+            df["price_delta_pct"] <= -0.03,
+            df["price_delta_pct"] >= 0.03,
+        ],
+        [
+            "市場均衡帯に対して上振れ。価格感応と在庫水準を踏まえ調整推奨。",
+            "現在価格に値上げ余地。粗利改善余地が残る。",
+        ],
+        default="価格は概ね妥当。画像・訴求・配送条件を優先改善。"
+    )
 
-    try:
-        band = pd.qcut(price_series.rank(method="first"), q=min(6, max(2, price_series.nunique())), duplicates="drop")
-        return band.astype(str)
-    except Exception:
-        return pd.Series(["single"] * len(price_series), index=price_series.index)
+    df["recommended_action"] = np.select(
+        [
+            df["price_delta_pct"] <= -0.03,
+            df["price_delta_pct"] >= 0.03,
+        ],
+        [
+            "PRICE_DOWN_TEST",
+            "PRICE_UP_TEST",
+        ],
+        default="HOLD_PRICE"
+    )
 
-
-def normalize_items(items: List[Dict[str, Any]], page: int) -> pd.DataFrame:
-    rows = []
-    for item in items:
-        images = item.get("mediumImageUrls", []) or []
-        image_url = None
-        if images:
-            first = images[0]
-            if isinstance(first, dict):
-                image_url = first.get("imageUrl")
-            elif isinstance(first, str):
-                image_url = first
-
-        rows.append(
-            {
-                "取得ページ": page,
-                "商品名": item.get("itemName"),
-                "価格": item.get("itemPrice"),
-                "店舗名": item.get("shopName"),
-                "店舗コード": item.get("shopCode"),
-                "ジャンルID": item.get("genreId"),
-                "レビュー件数": item.get("reviewCount"),
-                "レビュー平均": item.get("reviewAverage"),
-                "在庫あり": item.get("availability"),
-                "送料無料": item.get("postageFlag"),
-                "商品URL": item.get("itemUrl"),
-                "画像URL": image_url,
-            }
-        )
-
-    df = pd.DataFrame(rows)
-    if df.empty:
-        return df
-
-    numeric_cols = ["価格", "レビュー件数", "レビュー平均", "在庫あり", "送料無料"]
-    for col in numeric_cols:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
-
-    df["価格"] = df["価格"].fillna(0)
-    df["レビュー件数"] = df["レビュー件数"].fillna(0)
-    df["レビュー平均"] = df["レビュー平均"].fillna(0)
-    df["需要ウェイト"] = np.log1p(df["レビュー件数"].clip(lower=0)) * df["レビュー平均"].clip(lower=1)
-    df["需要ウェイト"] = df["需要ウェイト"].replace([np.inf, -np.inf], 0).fillna(0)
-    df["価格帯ラベル"] = build_price_band(df["価格"])
     return df
 
 
-def fetch_market_dataset(
-    application_id: str,
-    access_key: str,
-    allowed_origin: str,
-    keyword: str,
-    pages_to_scan: int,
-    hits: int,
-    sort: str,
-    api_shop_code: str,
-    genre_id: str,
-    min_price: int,
-    max_price: int,
-    availability_only: bool,
-):
-    frames: List[pd.DataFrame] = []
-    meta: Dict[str, Any] = {}
-    for idx, page in enumerate(range(1, pages_to_scan + 1), start=1):
-        raw = fetch_search_page(
-            application_id=application_id,
-            access_key=access_key,
-            allowed_origin=allowed_origin,
-            keyword=keyword,
-            page=page,
-            hits=hits,
-            sort=sort,
-            api_shop_code=api_shop_code,
-            genre_id=genre_id,
-            min_price=min_price,
-            max_price=max_price,
-            availability_only=availability_only,
-        )
-        if not meta:
-            meta = {
-                "total_count": raw.get("count"),
-                "page_count": raw.get("pageCount"),
-                "hits": raw.get("hits"),
-            }
-        items = raw.get("Items") or raw.get("items") or []
-        page_df = normalize_items(items, page)
-        if page_df.empty:
-            break
-        frames.append(page_df)
-        if idx < pages_to_scan:
-            time.sleep(1.08)
-
-    if not frames:
-        return pd.DataFrame(), meta
-
-    market_df = pd.concat(frames, ignore_index=True)
-    market_df.drop_duplicates(subset=["商品URL"], inplace=True)
-    return market_df, meta
-
-
-def weighted_quantile(values: np.ndarray, weights: np.ndarray, q: float) -> float:
-    if len(values) == 0:
-        return float("nan")
-    sorter = np.argsort(values)
-    values = values[sorter]
-    weights = weights[sorter]
-    cumulative = np.cumsum(weights)
-    if cumulative[-1] == 0:
-        return float(np.quantile(values, q))
-    cutoff = q * cumulative[-1]
-    return float(values[np.searchsorted(cumulative, cutoff, side="left")])
-
-
-def safe_corr(x: pd.Series, y: pd.Series) -> float:
-    if x.dropna().shape[0] < 3 or y.dropna().shape[0] < 3:
-        return float("nan")
-    return float(x.corr(y))
-
-
-def estimate_elasticity_proxy(df: pd.DataFrame) -> Dict[str, Any]:
-    sample = df[(df["価格"] > 0) & (df["レビュー件数"] >= 0)].copy()
-    if len(sample) < 8 or sample["価格"].nunique() < 4:
-        return {
-            "slope": np.nan,
-            "label": "insufficient",
-            "summary": "データ点が不足しているため、感応度プロキシの推定は保留。",
-        }
-
-    x = np.log(sample["価格"])
-    y = np.log1p(sample["レビュー件数"])
-    slope, intercept = np.polyfit(x, y, 1)
-    corr = safe_corr(x, y)
-
-    if slope <= -1.0:
-        label = "high"
-        summary = "価格変化に対して反応が強い市場帯。小さな値付け差でも需要差が出やすい。"
-    elif slope <= -0.45:
-        label = "medium"
-        summary = "価格感応は中程度。価格以外の訴求でも勝負できるが、過度な乖離は危険。"
-    else:
-        label = "low"
-        summary = "価格単独では決まりにくい市場帯。レビュー、訴求軸、配送条件の影響が相対的に大きい。"
-
+def build_overview_kpis(rec_df: pd.DataFrame) -> Dict[str, float]:
+    total_revenue = rec_df["revenue"].sum()
+    total_profit = rec_df["gross_profit"].sum()
+    total_sessions = rec_df["sessions"].sum()
+    total_orders = rec_df["orders"].sum()
+    cvr = total_orders / total_sessions if total_sessions else 0
+    avg_delta = rec_df["price_delta_pct"].mean()
     return {
-        "slope": float(slope),
-        "intercept": float(intercept),
-        "corr": float(corr) if not math.isnan(corr) else np.nan,
-        "label": label,
-        "summary": summary,
+        "revenue": total_revenue,
+        "profit": total_profit,
+        "sessions": total_sessions,
+        "orders": total_orders,
+        "cvr": cvr,
+        "avg_delta": avg_delta,
     }
 
 
-def analyze_market(df: pd.DataFrame, own_shop_code: str, own_shop_name: str) -> Dict[str, Any]:
-    if df.empty:
-        return {}
+def build_actions(rec_df: pd.DataFrame):
+    actions = []
+    down = rec_df.sort_values("price_delta_pct").head(2)
+    up = rec_df.sort_values("price_delta_pct", ascending=False).head(2)
 
-    weights = (df["需要ウェイト"].fillna(0) + 1).to_numpy(dtype=float)
-    prices = df["価格"].to_numpy(dtype=float)
+    if len(down):
+        sku = down.iloc[0]
+        actions.append({
+            "priority":"critical",
+            "title": f"{sku['sku']} を即テスト対象へ",
+            "body": f"{sku['product_name']} は現行 {fmt_yen(sku['current_price'])} に対し推薦 {fmt_yen(sku['recommended_price'])}。価格感応と競争密度の観点で取りこぼしが疑われます。",
+            "next": "3%刻みの価格テストと、メイン画像差し替えを同時実施。",
+        })
+    if len(up):
+        sku = up.iloc[0]
+        actions.append({
+            "priority":"priority",
+            "title": f"{sku['sku']} は値上げ余地あり",
+            "body": f"{sku['product_name']} は現行 {fmt_yen(sku['current_price'])} に対し推薦 {fmt_yen(sku['recommended_price'])}。粗利改善余地が見込めます。",
+            "next": "CVRが崩れない範囲で +2〜4% の段階改定。",
+        })
 
-    equilibrium = weighted_quantile(prices, weights, 0.50)
-    lower_band = weighted_quantile(prices, weights, 0.35)
-    upper_band = weighted_quantile(prices, weights, 0.65)
+    low_stock = rec_df.sort_values("stock").head(1).iloc[0]
+    actions.append({
+        "priority":"priority",
+        "title": f"在庫監視 SKU: {low_stock['sku']}",
+        "body": f"{low_stock['product_name']} は在庫 {int(low_stock['stock'])}。価格改定より欠品回避を優先すべき水準です。",
+        "next": "価格を上げて需要を平準化するか、補充計画を前倒し。",
+    })
 
-    market = {
-        "items": int(len(df)),
-        "shops": int(df["店舗コード"].nunique()),
-        "mean_price": float(df["価格"].mean()) if len(df) else np.nan,
-        "median_price": float(df["価格"].median()) if len(df) else np.nan,
-        "eq_price": equilibrium,
-        "eq_low": lower_band,
-        "eq_high": upper_band,
-        "avg_review": float(df["レビュー平均"].replace(0, np.nan).mean()) if len(df) else np.nan,
-        "median_reviews": float(df["レビュー件数"].median()) if len(df) else np.nan,
-        "elasticity": estimate_elasticity_proxy(df),
-    }
-
-    own_mask = pd.Series(False, index=df.index)
-    if own_shop_code.strip():
-        own_mask = own_mask | (df["店舗コード"].fillna("").astype(str).str.lower() == own_shop_code.strip().lower())
-    if own_shop_name.strip():
-        own_mask = own_mask | df["店舗名"].fillna("").astype(str).str.contains(own_shop_name.strip(), case=False, na=False)
-
-    own_df = df.loc[own_mask].copy()
-    market["own_df"] = own_df
-    market["market_df"] = df
-
-    if not own_df.empty:
-        market["own_median_price"] = float(own_df["価格"].median())
-        market["own_avg_review"] = float(own_df["レビュー平均"].replace(0, np.nan).mean()) if len(own_df) else np.nan
-        market["own_items"] = int(len(own_df))
-        market["own_review_median"] = float(own_df["レビュー件数"].median()) if len(own_df) else np.nan
-        market["price_gap_ratio"] = float((market["own_median_price"] / equilibrium) - 1) if equilibrium else np.nan
-    else:
-        market["own_items"] = 0
-        market["price_gap_ratio"] = np.nan
-
-    band_df = (
-        df.groupby("価格帯ラベル", dropna=False)
-        .agg(
-            商品数=("商品名", "count"),
-            平均価格=("価格", "mean"),
-            平均レビュー件数=("レビュー件数", "mean"),
-            平均レビュー評価=("レビュー平均", "mean"),
-            需要総量=("需要ウェイト", "sum"),
-            店舗数=("店舗コード", "nunique"),
-        )
-        .reset_index()
-    )
-    band_df["バンド魅力度"] = (band_df["需要総量"] + 1) / np.sqrt(band_df["商品数"].clip(lower=1))
-    band_df = band_df.sort_values("バンド魅力度", ascending=False)
-    market["band_df"] = band_df
-
-    market["top_shops"] = (
-        df.groupby("店舗名", dropna=False)
-        .agg(
-            商品数=("商品名", "count"),
-            中央価格=("価格", "median"),
-            平均レビュー件数=("レビュー件数", "mean"),
-        )
-        .sort_values(["商品数", "平均レビュー件数"], ascending=False)
-        .head(12)
-        .reset_index()
-    )
-
-    market["top_items"] = (
-        df.sort_values(["需要ウェイト", "レビュー件数", "レビュー平均"], ascending=False)
-        .head(15)
-        .copy()
-    )
-
-    return market
-
-
-def generate_actions(analysis: Dict[str, Any]) -> List[Dict[str, str]]:
-    if not analysis:
-        return []
-
-    actions: List[Dict[str, str]] = []
-    eq_price = analysis.get("eq_price", np.nan)
-    eq_low = analysis.get("eq_low", np.nan)
-    eq_high = analysis.get("eq_high", np.nan)
-    elasticity = analysis.get("elasticity", {})
-    own_items = analysis.get("own_items", 0)
-
-    if own_items == 0:
-        actions.append(
-            {
-                "priority": "high",
-                "title": "自店SKUの照合を先に通す",
-                "body": "今回の検索結果内でアストロの商品が同定できていません。市場比較は見えていますが、自店比較の精度が落ちます。",
-                "next": "自店ショップコード、商品名接頭辞、またはSKUマスタを内部データと接続し、結果テーブルへフラグ付けしてください。",
-            }
-        )
-    else:
-        gap = analysis.get("price_gap_ratio", np.nan)
-        own_median_price = analysis.get("own_median_price", np.nan)
-        own_review_median = analysis.get("own_review_median", np.nan)
-        market_review_median = analysis.get("median_reviews", np.nan)
-
-        if not np.isnan(gap) and gap > 0.08 and own_review_median <= market_review_median:
-            actions.append(
-                {
-                    "priority": "high",
-                    "title": "価格を均衡帯へ寄せるABテストを実施",
-                    "body": f"自店中央値 ¥{int(own_median_price):,} が市場均衡帯の上側にあります。レビュー反応が市場中央値以下なら、現価格は取りこぼしの可能性があります。",
-                    "next": f"対象SKUを絞り、まずは -3% と -6% の二段階テストで均衡帯 ¥{int(eq_low):,} 〜 ¥{int(eq_high):,} への接近効果を確認してください。",
-                }
-            )
-        elif not np.isnan(gap) and gap < -0.08:
-            actions.append(
-                {
-                    "priority": "mid",
-                    "title": "値上げ余地のあるSKUを抽出",
-                    "body": f"自店中央値 ¥{int(own_median_price):,} は市場均衡帯より下です。レビュー水準が保てているSKUでは粗利余地を捨てている可能性があります。",
-                    "next": f"レビュー評価とCVRが崩れていないSKUから、+3% を起点に段階値上げテストを行い、均衡点 ¥{int(eq_price):,} 付近まで探索してください。",
-                }
-            )
-        else:
-            actions.append(
-                {
-                    "priority": "low",
-                    "title": "価格そのものより訴求差を詰める",
-                    "body": "自店価格は概ね市場の均衡帯にあります。この状態では価格だけでなく、配送条件、画像、レビュー母数、訴求軸の差が効きます。",
-                    "next": "同一価格帯でレビュー件数上位の商品群を抜き出し、訴求ワードと画像構成の差分をテンプレ化してください。",
-                }
-            )
-
-    if elasticity.get("label") == "high":
-        actions.append(
-            {
-                "priority": "high",
-                "title": "価格改定は小刻みに運用",
-                "body": "価格感応が高い市場帯です。大きな変更はノイズが乗りやすく、原因の特定が難しくなります。",
-                "next": "変更幅は 2% から 5% に抑え、レビュー件数、セッション、転換率を週次で観測してください。",
-            }
-        )
-    elif elasticity.get("label") == "low":
-        actions.append(
-            {
-                "priority": "mid",
-                "title": "価格より条件面の改善を優先",
-                "body": "価格だけでは説明しきれない市場です。レビュー、送料無料、納期、商品画像の品質差が相対的に効いています。",
-                "next": "配送条件と商品LP要素を見直し、同価格帯比較でクリック率とレビュー獲得率の改善を先に狙ってください。",
-            }
-        )
-
-    band_df = analysis.get("band_df")
-    if isinstance(band_df, pd.DataFrame) and not band_df.empty:
-        best_band = band_df.iloc[0]
-        actions.append(
-            {
-                "priority": "mid",
-                "title": "需要密度の高い価格帯へ寄せる",
-                "body": f"現在の観測では、最も魅力度が高い価格帯は {best_band['価格帯ラベル']} です。ここは需要総量に対して商品数の密度がまだ過剰ではありません。",
-                "next": "価格、訴求、セット構成をこの帯に合わせて設計し、対象SKUの露出を集中的に増やしてください。",
-            }
-        )
-
+    hold = rec_df.iloc[(rec_df["price_delta_pct"].abs()).argmin()]
+    actions.append({
+        "priority":"advisory",
+        "title": f"{hold['sku']} は価格維持判断",
+        "body": f"{hold['product_name']} は市場均衡帯と概ね整合。ここは値段よりも画像・レビュー・配送文言の改善が効きます。",
+        "next": "価格は保持し、転換率改善のテストへ回す。",
+    })
     return actions[:4]
 
 
-def fmt_yen(value: float) -> str:
-    if value is None or (isinstance(value, float) and np.isnan(value)):
-        return "-"
-    return f"¥{int(round(value)):,}"
-
-
-def fmt_num(value: float, digits: int = 2) -> str:
-    if value is None or (isinstance(value, float) and np.isnan(value)):
-        return "-"
-    return f"{value:.{digits}f}"
-
-
-def render_metric_card(label: str, value: str, foot: str) -> None:
+def metric_card(label: str, value: str, foot: str):
     st.markdown(
         f"""
-        <div class="metric-card">
-            <div class="metric-label">{label}</div>
-            <div class="metric-value">{value}</div>
-            <div class="metric-foot">{foot}</div>
+        <div class="metric">
+          <div class="metric-label">{label}</div>
+          <div class="metric-value">{value}</div>
+          <div class="metric-foot">{foot}</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
 
-def render_signal(title: str, body: str) -> None:
+def action_card(item: Dict[str, str]):
     st.markdown(
         f"""
-        <div class="signal-card">
-            <div class="signal-title">{title}</div>
-            <div class="signal-body">{body}</div>
+        <div class="action-box">
+          <div class="action-priority">{item['priority']}</div>
+          <div class="action-title">{item['title']}</div>
+          <div class="action-body">{item['body']}</div>
+          <div class="action-next"><strong>NEXT</strong> {item['next']}</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
 
-def render_action_card(priority: str, title: str, body: str, next_step: str) -> None:
-    class_name = {
-        "high": "priority-high",
-        "mid": "priority-mid",
-        "low": "priority-low",
-    }.get(priority, "priority-low")
-
-    label = {
-        "high": "Critical",
-        "mid": "Priority",
-        "low": "Advisory",
-    }.get(priority, "Advisory")
-
-    st.markdown(
-        f"""
-        <div class="action-card">
-            <div class="action-priority {class_name}">{label}</div>
-            <div class="action-title">{title}</div>
-            <div class="action-body">{body}</div>
-            <div class="action-next"><strong>Next:</strong> {next_step}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def price_histogram(df: pd.DataFrame) -> go.Figure:
-    fig = px.histogram(df, x="価格", nbins=24, template="plotly_dark", opacity=0.9)
+def price_delta_chart(rec_df: pd.DataFrame):
+    chart_df = rec_df.sort_values("price_delta_pct")
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=chart_df["sku"],
+        y=chart_df["price_delta_pct"] * 100,
+        text=[f"{x*100:.1f}%" for x in chart_df["price_delta_pct"]],
+        textposition="outside",
+        marker_color="#9aa4b2",
+    ))
     fig.update_layout(
-        title="Price Distribution",
-        margin=dict(l=10, r=10, t=45, b=10),
+        title="Recommended Price Delta by SKU",
+        template="plotly_dark",
+        height=340,
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        height=360,
+        margin=dict(l=20, r=20, t=50, b=20),
+        xaxis_title="SKU",
+        yaxis_title="% vs Current Price",
     )
     return fig
 
 
-def shop_bar_chart(shop_df: pd.DataFrame) -> go.Figure:
-    fig = px.bar(
-        shop_df.head(10),
-        x="商品数",
-        y="店舗名",
-        orientation="h",
-        template="plotly_dark",
-        hover_data=["中央価格", "平均レビュー件数"],
-    )
+def revenue_profit_chart(rec_df: pd.DataFrame):
+    chart_df = rec_df.copy()
+    fig = go.Figure()
+    fig.add_trace(go.Bar(name="Revenue", x=chart_df["sku"], y=chart_df["revenue"]))
+    fig.add_trace(go.Bar(name="Gross Profit", x=chart_df["sku"], y=chart_df["gross_profit"]))
     fig.update_layout(
-        title="Shop Presence Top 10",
-        margin=dict(l=10, r=10, t=45, b=10),
+        barmode="group",
+        template="plotly_dark",
+        title="Revenue / Gross Profit by SKU",
+        height=340,
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        height=380,
-        yaxis={"categoryorder": "total ascending"},
+        margin=dict(l=20, r=20, t=50, b=20),
     )
     return fig
-
-
-def scatter_price_review(df: pd.DataFrame, own_shop_name: str, own_shop_code: str) -> go.Figure:
-    chart_df = df.copy()
-    chart_df["自店"] = "Market"
-    own_mask = pd.Series(False, index=chart_df.index)
-    if own_shop_code.strip():
-        own_mask = own_mask | (chart_df["店舗コード"].fillna("").astype(str).str.lower() == own_shop_code.strip().lower())
-    if own_shop_name.strip():
-        own_mask = own_mask | chart_df["店舗名"].fillna("").astype(str).str.contains(own_shop_name.strip(), case=False, na=False)
-    chart_df.loc[own_mask, "自店"] = "ASTRO"
-
-    fig = px.scatter(
-        chart_df,
-        x="価格",
-        y="レビュー件数",
-        color="自店",
-        size="需要ウェイト",
-        hover_name="商品名",
-        hover_data=["店舗名", "レビュー平均"],
-        template="plotly_dark",
-    )
-    fig.update_layout(
-        title="Price x Review Momentum",
-        margin=dict(l=10, r=10, t=45, b=10),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        height=420,
-    )
-    return fig
-
-
-def elasticity_gauge(elasticity: Dict[str, Any]) -> go.Figure:
-    slope = elasticity.get("slope", np.nan)
-    value = 0 if np.isnan(slope) else max(min(abs(slope), 2.0), 0.0)
-    fig = go.Figure(
-        go.Indicator(
-            mode="gauge+number",
-            value=value,
-            number={"font": {"size": 34}},
-            title={"text": "Elasticity Proxy Intensity"},
-            gauge={
-                "axis": {"range": [0, 2]},
-                "bar": {"color": "#78b4ff"},
-                "bgcolor": "rgba(255,255,255,0.02)",
-                "borderwidth": 0,
-                "steps": [
-                    {"range": [0, 0.45], "color": "rgba(65,255,214,0.15)"},
-                    {"range": [0.45, 1.0], "color": "rgba(255,200,87,0.18)"},
-                    {"range": [1.0, 2.0], "color": "rgba(255,107,107,0.18)"},
-                ],
-            },
-        )
-    )
-    fig.update_layout(
-        template="plotly_dark",
-        margin=dict(l=10, r=10, t=60, b=10),
-        paper_bgcolor="rgba(0,0,0,0)",
-        height=300,
-    )
-    return fig
-
-
-def make_download_df(df: pd.DataFrame) -> pd.DataFrame:
-    cols = [
-        "取得ページ",
-        "商品名",
-        "価格",
-        "店舗名",
-        "店舗コード",
-        "ジャンルID",
-        "レビュー件数",
-        "レビュー平均",
-        "在庫あり",
-        "送料無料",
-        "需要ウェイト",
-        "商品URL",
-        "画像URL",
-    ]
-    return df[cols].copy()
 
 
 inject_css()
 
-application_id = get_secret("RAKUTEN_APPLICATION_ID")
-access_key = get_secret("RAKUTEN_ACCESS_KEY")
-allowed_origin = get_secret("RAKUTEN_ALLOWED_ORIGIN", "")
-
 st.markdown(
     """
-    <div class="mission-hero">
-        <div class="eyebrow">ASTRO / MARKET INTELLIGENCE COMMAND</div>
-        <h1 class="hero-title">市場を観測し、<br>一手だけを前面に出す。</h1>
-        <p class="hero-sub">
-            楽天市場の公開データを裏で集約・解析し、表では単純なアクション推奨へ落とし込む司令卓です。
-            目標は、価格均衡帯の発見、価格感応度の推定、競争密度の把握、そしてアストロ視点での次の一手の明示です。
-        </p>
-        <div class="tag-row">
-            <div class="tag">Equilibrium Mapping</div>
-            <div class="tag">Elasticity Proxy</div>
-            <div class="tag">Action Recommendation</div>
-            <div class="tag">ASTRO Scope</div>
+    <div class="hero">
+      <div class="hero-top">
+        <div class="hero-badge">ASTRO / RMS 2.0 CONSOLE</div>
+        <div class="hero-badge">TACTICAL OPERATIONS PANEL</div>
+      </div>
+      <div class="hero-grid">
+        <div>
+          <div class="hero-title">価格、客足、利益を<br>一つの操作盤に集約する。</div>
+          <div class="hero-sub">
+            これは市場俯瞰BIではなく、アストロ向けの軽量RMSを意識した運用画面です。
+            商品ごとの現行価格、推薦価格、売上、客足、利益、在庫、競争密度を束ね、
+            最後は「何をどう触るか」だけを前面に出します。
+          </div>
         </div>
+        <div class="hero-plate">
+          <div class="plate-label">Operational Doctrine</div>
+          <div class="plate-body">
+            価格推薦は単発計算ではなく、履歴の蓄積からしか精度が出ません。
+            したがって、この種の画面には最低限のデータベースが必要です。
+            無料で始めるなら、まずは Google Sheets をテーブル代わりに使うのが最も速いです。
+          </div>
+        </div>
+      </div>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-if not application_id or not access_key:
-    st.error("Secrets が不足しています。RAKUTEN_APPLICATION_ID と RAKUTEN_ACCESS_KEY を設定してください。")
-    st.code(
-        """# .streamlit/secrets.toml
-RAKUTEN_APPLICATION_ID = "your_application_id"
-RAKUTEN_ACCESS_KEY = "your_access_key"
-RAKUTEN_ALLOWED_ORIGIN = "https://your-streamlit-app-url"
-"""
-    )
-    st.stop()
-
 with st.sidebar:
-    st.markdown("### Mission Setup")
-    keyword = st.text_input("観測キーワード", value="収納")
-    own_shop_code = st.text_input("自店ショップコード", value="1storage")
-    own_shop_name = st.text_input("自店名称キーワード", value="アストロ")
-    api_shop_code = st.text_input("APIフィルタ用ショップコード", value="", help="市場全体を見る場合は空欄のままにしてください。")
-    genre_id = st.text_input("ジャンルID", value="")
-    sort = st.selectbox(
-        "ソート",
-        options=["standard", "+itemPrice", "-itemPrice", "+reviewCount", "-reviewCount", "+reviewAverage", "-reviewAverage"],
-        index=0,
-    )
-    pages_to_scan = st.slider("取得ページ数", min_value=1, max_value=5, value=3)
-    hits = st.slider("1ページ件数", min_value=10, max_value=30, value=30)
-    availability_only = st.checkbox("在庫ありのみ", value=False)
+    st.markdown("### Data Source")
+    mode = st.radio("source mode", ["DEMO", "CSV / SHEETS"], index=0)
 
-    c1, c2 = st.columns(2)
-    with c1:
-        min_price = st.number_input("最低価格", min_value=0, value=0, step=500)
-    with c2:
-        max_price = st.number_input("最高価格", min_value=0, value=0, step=500)
+    price_sheet_url = st.text_input("price table csv url", value="", help="Google Sheets を CSV 公開したURLを想定")
+    market_sheet_url = st.text_input("market table csv url", value="", help="Google Sheets を CSV 公開したURLを想定")
+    price_upload = st.file_uploader("price table csv", type=["csv"])
+    market_upload = st.file_uploader("market table csv", type=["csv"])
 
-    st.caption("公開市場データを使った観測です。真の需要弾力性ではなく、まずは市場感応度のプロキシを出します。")
-    run = st.button("INTELLIGENCE RUN", use_container_width=True)
+    run = st.button("RUN CONSOLE", use_container_width=True)
 
-tabs = st.tabs(["Command Deck", "Market Radar", "Equilibrium Lab", "Evidence"])
+tabs = st.tabs(["Control Board", "Price Recommendations", "Operations Ledger", "Data Model"])
 
 if run:
-    with st.spinner("市場シグナルを収集中..."):
-        market_df, meta = fetch_market_dataset(
-            application_id=application_id,
-            access_key=access_key,
-            allowed_origin=allowed_origin,
-            keyword=keyword,
-            pages_to_scan=int(pages_to_scan),
-            hits=int(hits),
-            sort=sort,
-            api_shop_code=api_shop_code.strip(),
-            genre_id=genre_id.strip(),
-            min_price=int(min_price),
-            max_price=int(max_price),
-            availability_only=availability_only,
-        )
+    if mode == "CSV / SHEETS":
+        price_df = load_source(price_sheet_url, price_upload, demo_price_table())
+        market_df = load_source(market_sheet_url, market_upload, demo_market_table())
+    else:
+        price_df = demo_price_table()
+        market_df = demo_market_table()
 
-    if market_df.empty:
-        st.warning("データが取得できませんでした。キーワードや価格条件を見直してください。")
-        st.stop()
-
-    analysis = analyze_market(market_df, own_shop_code=own_shop_code, own_shop_name=own_shop_name)
-    actions = generate_actions(analysis)
+    rec_df = build_recommendation_table(price_df, market_df)
+    kpis = build_overview_kpis(rec_df)
+    actions = build_actions(rec_df)
 
     with tabs[0]:
-        m1, m2, m3, m4 = st.columns(4)
-        with m1:
-            foot = f"{meta.get('total_count', '-'):,} 件中のサンプル観測" if meta.get("total_count") else "取得サンプル"
-            render_metric_card("Observed Items", f"{analysis['items']:,}", foot)
-        with m2:
-            render_metric_card("Equilibrium", fmt_yen(analysis["eq_price"]), f"均衡帯 {fmt_yen(analysis['eq_low'])} 〜 {fmt_yen(analysis['eq_high'])}")
-        with m3:
-            render_metric_card("ASTRO Median", fmt_yen(analysis.get("own_median_price", np.nan)), f"同定SKU数 {analysis.get('own_items', 0):,}")
-        with m4:
-            render_metric_card("Elasticity Proxy", fmt_num(analysis["elasticity"].get("slope", np.nan), 2), analysis["elasticity"].get("summary", "-"))
+        c1, c2, c3, c4, c5 = st.columns(5)
+        with c1:
+            metric_card("Revenue", fmt_yen(kpis["revenue"]), "対象SKU群の売上合計")
+        with c2:
+            metric_card("Gross Profit", fmt_yen(kpis["profit"]), "粗利合計")
+        with c3:
+            metric_card("Sessions", f"{int(kpis['sessions']):,}", "流入合計")
+        with c4:
+            metric_card("CVR", f"{kpis['cvr']*100:.2f}%", "注文 / セッション")
+        with c5:
+            metric_card("Avg Price Delta", fmt_pct(kpis["avg_delta"]), "推薦価格の平均差分")
 
-        st.markdown("#### Recommended Actions")
+        st.markdown("#### Tactical Actions")
         cols = st.columns(4)
-        for col, action in zip(cols, actions):
+        for col, item in zip(cols, actions):
             with col:
-                render_action_card(action["priority"], action["title"], action["body"], action["next"])
+                action_card(item)
 
         st.markdown("#### Mission Signals")
-        left, right = st.columns([1.1, 1.2])
+        left, right = st.columns([1, 1.2])
         with left:
-            gap_ratio = analysis.get("price_gap_ratio", np.nan)
-            gap_text = "-" if np.isnan(gap_ratio) else f"{gap_ratio * 100:+.1f}%"
-            render_signal(
-                "Price Positioning",
-                f"自店中央値と市場均衡点のギャップは {gap_text}。価格差だけでなく、レビュー密度と価格感応の組み合わせで判断します。",
-            )
-            render_signal(
-                "Competitive Density",
-                f"今回の観測では {analysis['shops']:,} 店舗が出現。多店舗市場では価格差よりも訴求差の積み上げが効きます。",
-            )
-        with right:
-            top_band = analysis["band_df"].iloc[0]
-            render_signal(
-                "Opportunity Band",
-                f"最も魅力度が高い価格帯は {top_band['価格帯ラベル']}。平均価格 {fmt_yen(top_band['平均価格'])}、平均レビュー件数 {fmt_num(top_band['平均レビュー件数'], 1)}。",
-            )
-            render_signal(
-                "Interpretation Notice",
-                "ここでの弾力性は、価格とレビュー件数の断面関係から推定した感応度プロキシです。真の需要弾力性は時系列またはABテストで別途検証が必要です。",
-            )
-
-    with tabs[1]:
-        c1, c2 = st.columns(2)
-        with c1:
-            st.plotly_chart(price_histogram(market_df), use_container_width=True)
-        with c2:
-            st.plotly_chart(shop_bar_chart(analysis["top_shops"]), use_container_width=True)
-
-        st.plotly_chart(scatter_price_review(market_df, own_shop_name, own_shop_code), use_container_width=True)
-
-        st.markdown("#### Demand Leaders")
-        leader_df = analysis["top_items"][["商品名", "価格", "店舗名", "レビュー件数", "レビュー平均", "需要ウェイト", "商品URL"]].copy()
-        st.dataframe(leader_df, use_container_width=True, hide_index=True)
-
-    with tabs[2]:
-        e1, e2 = st.columns([0.9, 1.1])
-        with e1:
-            st.plotly_chart(elasticity_gauge(analysis["elasticity"]), use_container_width=True)
-        with e2:
-            st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-            st.markdown("##### Pricing Logic")
-            st.write(
-                {
-                    "market_equilibrium": fmt_yen(analysis["eq_price"]),
-                    "equilibrium_low": fmt_yen(analysis["eq_low"]),
-                    "equilibrium_high": fmt_yen(analysis["eq_high"]),
-                    "market_median_price": fmt_yen(analysis["median_price"]),
-                    "market_mean_price": fmt_yen(analysis["mean_price"]),
-                    "astro_median_price": fmt_yen(analysis.get("own_median_price", np.nan)),
-                    "proxy_slope": fmt_num(analysis["elasticity"].get("slope", np.nan), 3),
-                    "proxy_corr": fmt_num(analysis["elasticity"].get("corr", np.nan), 3),
-                }
-            )
+            st.markdown('<div class="section">', unsafe_allow_html=True)
+            st.markdown('<div class="section-title">Signal Summary</div>', unsafe_allow_html=True)
             st.markdown(
-                '<p class="tiny-note">均衡価格はレビュー反応を重みとした重み付き中央値で算出しています。'
-                '単純平均ではなく、需要が集まっている価格帯へ寄せて推定します。</p>',
+                f"""
+                <div class="signal-line">
+                  <div class="signal-name">price down candidates</div>
+                  <div class="signal-value">{int((rec_df['recommended_action'] == 'PRICE_DOWN_TEST').sum())}</div>
+                  <div class="signal-note">市場均衡に対して上振れているSKU数</div>
+                </div>
+                <div class="signal-line">
+                  <div class="signal-name">price up candidates</div>
+                  <div class="signal-value">{int((rec_df['recommended_action'] == 'PRICE_UP_TEST').sum())}</div>
+                  <div class="signal-note">粗利改善余地が残るSKU数</div>
+                </div>
+                <div class="signal-line">
+                  <div class="signal-name">low stock units</div>
+                  <div class="signal-value">{int((rec_df['stock'] < 40).sum())}</div>
+                  <div class="signal-note">欠品警戒SKU数</div>
+                </div>
+                """,
                 unsafe_allow_html=True,
             )
-            st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+        with right:
+            st.plotly_chart(price_delta_chart(rec_df), use_container_width=True)
 
-        st.markdown("#### Price Band Opportunity Map")
-        band_df = analysis["band_df"].copy()
-        band_df["平均価格"] = band_df["平均価格"].round(0)
-        band_df["平均レビュー件数"] = band_df["平均レビュー件数"].round(1)
-        band_df["平均レビュー評価"] = band_df["平均レビュー評価"].round(2)
-        band_df["バンド魅力度"] = band_df["バンド魅力度"].round(2)
-        st.dataframe(band_df, use_container_width=True, hide_index=True)
+    with tabs[1]:
+        table = rec_df[[
+            "sku","product_name","current_price","recommended_price","price_delta","price_delta_pct",
+            "revenue","gross_profit","sessions","orders","stock",
+            "equilibrium_price","elasticity_proxy","competition_density",
+            "recommended_action","recommendation_reason"
+        ]].copy()
+        table["price_delta_pct"] = table["price_delta_pct"].map(lambda x: f"{x*100:.1f}%")
+        st.dataframe(table, use_container_width=True, hide_index=True)
+
+        csv = rec_df.to_csv(index=False).encode("utf-8-sig")
+        st.download_button("EXPORT RECOMMENDATIONS CSV", data=csv, file_name="astro_rms20_recommendations.csv", mime="text/csv")
+
+    with tabs[2]:
+        left, right = st.columns(2)
+        with left:
+            st.plotly_chart(revenue_profit_chart(rec_df), use_container_width=True)
+        with right:
+            st.markdown('<div class="section">', unsafe_allow_html=True)
+            st.markdown('<div class="section-title">Operational Interpretation</div>', unsafe_allow_html=True)
+            st.markdown(
+                """
+                <div class="small-note">
+                この画面は BI より一段運用寄りです。<br><br>
+                必要なのは単なる市場価格ではなく、SKUごとの<br>
+                ・現行価格<br>
+                ・売上<br>
+                ・客足（セッション）<br>
+                ・注文数 / CVR<br>
+                ・粗利<br>
+                ・在庫<br>
+                ・競合均衡価格<br>
+                の履歴です。<br><br>
+                これらを持って初めて、推薦価格が「単なる相場追随」ではなく、
+                自店の利益関数を踏まえた判断になります。
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.markdown('</div>', unsafe_allow_html=True)
 
     with tabs[3]:
-        st.markdown("#### Raw Market Dataset")
-        export_df = make_download_df(market_df)
-        st.download_button(
-            label="CSV Export",
-            data=export_df.to_csv(index=False).encode("utf-8-sig"),
-            file_name=f"astro_market_intelligence_{keyword}.csv",
-            mime="text/csv",
-            use_container_width=False,
+        st.markdown("#### Minimum Tables")
+        schema_df = pd.DataFrame([
+            {"table":"sku_master","purpose":"商品マスタ","key columns":"sku, product_name, category, cost, listing_url"},
+            {"table":"daily_kpi","purpose":"日次実績","key columns":"date, sku, price, sessions, orders, units, revenue, gross_profit"},
+            {"table":"market_snapshot","purpose":"市場均衡観測","key columns":"date, sku, keyword, equilibrium_price, market_low, market_high, elasticity_proxy, competition_density"},
+            {"table":"inventory_snapshot","purpose":"在庫記録","key columns":"date, sku, stock, inbound_qty"},
+            {"table":"recommendation_log","purpose":"推薦履歴","key columns":"date, sku, current_price, recommended_price, action, reason"},
+        ])
+        st.dataframe(schema_df, use_container_width=True, hide_index=True)
+
+        st.markdown(
+            """
+            **Google Sheets で始める場合**  
+            1つのスプレッドシートの中に、`sku_master` `daily_kpi` `market_snapshot` `inventory_snapshot` `recommendation_log`
+            を別タブで持つだけで始められます。  
+
+            **このコードの使い方**  
+            CSVをアップロードするか、Google Sheets を「CSV公開URL」にして読み込ませます。  
+            最初は価格推薦の確認画面として使い、あとから自動取得へ寄せる想定です。
+            """
         )
-        st.dataframe(export_df, use_container_width=True, hide_index=True)
 else:
     with tabs[0]:
-        st.markdown("#### Ready")
         st.markdown(
             """
-            このUIは、単純な検索画面ではなく、**市場監視から推奨アクションまでを1枚で返す** ことを目的にしています。
+            #### What this should become
 
-            初回は、アストロの主力カテゴリに寄せて次のようなキーワードから始めると使いやすいです。
-            `収納 / 収納ボックス / 衣類収納 / 防災 / 園芸 / キッチン収納`
+            これは市場レーダーではなく、**価格推薦リストを出す軽量RMS** の入口です。  
+            まずは `DEMO` で実行し、次に Google Sheets の CSV をつないで実データへ差し替えるのが最短です。
             """
-        )
-        st.markdown(
-            '<p class="tiny-note">アストロ商品が結果内に含まれるほど、自店比較と推奨精度は上がります。'
-            '将来的には、RMSや自社SKUマスタと結合して真の価格実験基盤に拡張する前提です。</p>',
-            unsafe_allow_html=True,
         )
