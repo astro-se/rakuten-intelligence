@@ -63,17 +63,28 @@ class RakutenAPIError(Exception):
 
 
 class RakutenClient:
-    def __init__(self, application_id: str, access_key: str, timeout: int = 20):
+    def __init__(self, application_id: str, access_key: str, timeout: int = 20, allowed_origin: str = ""):
         self.application_id = application_id
         self.access_key = access_key
         self.timeout = timeout
+        self.allowed_origin = allowed_origin.strip()
         self.session = requests.Session()
         self.session.headers.update(
             {
-                "User-Agent": "Rakuten-Intelligence/1.0",
+                "User-Agent": "Rakuten-Intelligence/1.1",
                 "Accept": "application/json",
+                # accessKey can be sent either by header or query param.
+                # We prefer header to avoid leaking it in logs / UI.
+                "accessKey": self.access_key,
             }
         )
+        if self.allowed_origin:
+            self.session.headers.update(
+                {
+                    "Origin": self.allowed_origin,
+                    "Referer": f"{self.allowed_origin.rstrip('/')}/",
+                }
+            )
 
     def _get(self, url: str, params: Dict[str, Any]) -> Dict[str, Any]:
         ensure_rate_limit()
@@ -81,7 +92,6 @@ class RakutenClient:
         params = {
             "format": "json",
             "applicationId": self.application_id,
-            "accessKey": self.access_key,
             **params,
         }
 
@@ -291,6 +301,7 @@ st.caption("楽天市場の公開データを使って、市場俯瞰と競合�
 
 application_id = get_secret("RAKUTEN_APPLICATION_ID")
 access_key = get_secret("RAKUTEN_ACCESS_KEY")
+allowed_origin = get_secret("RAKUTEN_ALLOWED_ORIGIN", "")
 
 if not application_id or not access_key:
     st.error(
@@ -300,11 +311,17 @@ if not application_id or not access_key:
         """# .streamlit/secrets.toml
 RAKUTEN_APPLICATION_ID = "your_application_id"
 RAKUTEN_ACCESS_KEY = "your_access_key"
+# 任意: 楽天のアプリ登録時に設定した許可ドメイン
+RAKUTEN_ALLOWED_ORIGIN = "https://your-domain.example"
 """
     )
     st.stop()
 
-client = RakutenClient(application_id=application_id, access_key=access_key)
+client = RakutenClient(
+    application_id=application_id,
+    access_key=access_key,
+    allowed_origin=allowed_origin,
+)
 
 with st.sidebar:
     st.header("検索条件")
@@ -403,7 +420,31 @@ with tab1:
                 st.dataframe(df, use_container_width=True, hide_index=True)
 
         except requests.HTTPError as e:
-            st.error(f"HTTPエラー: {e}")
+            status = getattr(e.response, "status_code", None)
+            if status == 403:
+                st.error("HTTP 403: 認証またはアクセス制御で拒否されました。")
+                st.markdown(
+                    """
+考えられる原因:
+
+1. `RAKUTEN_APPLICATION_ID` と `RAKUTEN_ACCESS_KEY` が**同じアプリの組み合わせ**になっていない
+2. 楽天のアプリ登録で設定した**許可ドメイン**と、実際のリクエスト元が一致していない
+3. Streamlit Cloud 等で実行している場合、`Origin` ヘッダが必要な構成になっている
+
+下の診断情報を確認してください。
+                    """
+                )
+                st.json(
+                    {
+                        "endpoint": PUBLIC_ITEM_SEARCH_URL if mode == "市場検索" else PUBLIC_RANKING_URL,
+                        "application_id_prefix": application_id[:8] + "...",
+                        "access_key_prefix": access_key[:8] + "...",
+                        "allowed_origin": allowed_origin or "(not set)",
+                        "note": "accessKey is sent via HTTP header, not query param",
+                    }
+                )
+            else:
+                st.error(f"HTTPエラー: {e}")
         except RakutenAPIError as e:
             st.error(f"Rakuten APIエラー: {e}")
         except Exception as e:
