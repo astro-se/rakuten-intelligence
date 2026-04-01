@@ -1,8 +1,7 @@
 
 import io
 import math
-from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Tuple
 
 import numpy as np
 import pandas as pd
@@ -10,261 +9,279 @@ import plotly.graph_objects as go
 import requests
 import streamlit as st
 
-
 st.set_page_config(
-    page_title="ASTRO RMS 2.0 Console",
+    page_title="ASTRO OPS CONSOLE",
+    page_icon="◼",
     layout="wide",
-    page_icon="▣",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
-
+# --------------------------------------------------
+# Visual system
+# --------------------------------------------------
 def inject_css() -> None:
     st.markdown(
         """
         <style>
         :root{
-            --bg:#0a0d12;
-            --panel:#12171f;
+            --bg:#0b0e13;
+            --panel:#131821;
             --panel2:#171d27;
-            --line:#2c3442;
-            --soft:#7e8795;
-            --text:#e8edf4;
-            --white:#ffffff;
-            --accent:#d4d9df;
-            --good:#c7d2bf;
-            --warn:#d5c7a1;
-            --bad:#d1b3b3;
+            --panel3:#1b212c;
+            --line:#2d3543;
+            --line2:#3d4656;
+            --text:#eef2f7;
+            --muted:#98a2b0;
+            --muted2:#b7c0cb;
+            --accent:#d7dde5;
+            --ok:#d5e1d0;
+            --warn:#e0d6b9;
+            --bad:#e1c4c4;
         }
 
-        html, body, [class*="css"]  {
-            font-family: "Inter", "SF Pro Display", "Segoe UI", sans-serif;
+        html, body, [class*="css"] {
+            font-family: Inter, "SF Pro Display", "Segoe UI", sans-serif;
         }
 
-        .stApp {
+        .stApp{
             background:
-                linear-gradient(180deg, #080a0f 0%, #0a0d12 100%);
+                linear-gradient(180deg, #090c11 0%, #0b0e13 100%);
             color: var(--text);
         }
 
-        .block-container {
-            max-width: 1520px;
-            padding-top: 1.1rem;
-            padding-bottom: 2rem;
+        .block-container{
+            max-width: 1580px;
+            padding-top: 0.9rem;
+            padding-bottom: 1.8rem;
         }
 
-        section[data-testid="stSidebar"]{
-            background: linear-gradient(180deg, #0d1118 0%, #0a0d12 100%);
-            border-right: 1px solid var(--line);
-        }
+        section[data-testid="stSidebar"]{display:none !important;}
+        header[data-testid="stHeader"]{background:transparent;}
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
 
-        .hero {
-            border: 1px solid var(--line);
-            background:
-                linear-gradient(180deg, rgba(23,29,39,0.96), rgba(13,17,24,0.96));
-            border-radius: 6px;
-            padding: 26px 28px 22px 28px;
-            margin-bottom: 16px;
-            box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
-        }
-
-        .hero-top {
+        .topbar{
+            border:1px solid var(--line);
+            border-radius: 4px;
+            padding: 10px 14px;
+            background: linear-gradient(180deg, #141922 0%, #11161d 100%);
             display:flex;
             justify-content:space-between;
             align-items:center;
-            margin-bottom:14px;
+            margin-bottom: 12px;
         }
 
-        .hero-badge {
-            display:inline-block;
-            border:1px solid #3b4554;
-            color:#cfd6df;
-            font-size:11px;
-            padding:6px 10px;
+        .topbar-left{
+            display:flex;
+            gap:10px;
+            align-items:center;
+        }
+
+        .topbar-chip{
+            border:1px solid var(--line2);
             border-radius:3px;
-            letter-spacing:0.14em;
-            text-transform:uppercase;
+            padding: 6px 10px;
+            font-size: 10px;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--muted2);
+            background:#0e1319;
         }
 
-        .hero-grid {
+        .hero{
+            border:1px solid var(--line);
+            border-radius: 4px;
+            background: linear-gradient(180deg, #171d27 0%, #0f141b 100%);
+            padding: 24px 26px 20px 26px;
+            margin-bottom: 14px;
+        }
+
+        .hero-grid{
             display:grid;
-            grid-template-columns: 1.3fr 0.9fr;
-            gap:18px;
+            grid-template-columns: 1.4fr 0.8fr;
+            gap: 18px;
             align-items:start;
         }
 
-        .hero-title {
-            font-size:34px;
-            line-height:1.08;
-            font-weight:800;
-            letter-spacing:0.01em;
-            color:var(--white);
-            margin:0 0 10px 0;
+        .hero-title{
+            font-size: 36px;
+            line-height: 1.02;
+            font-weight: 850;
+            color: white;
+            margin: 0 0 10px 0;
+            letter-spacing: 0.01em;
         }
 
-        .hero-sub {
-            font-size:14px;
-            color:#a8b1bd;
-            line-height:1.75;
-            max-width:900px;
+        .hero-sub{
+            font-size: 14px;
+            line-height: 1.78;
+            color: var(--muted2);
+            max-width: 980px;
         }
 
-        .hero-plate {
+        .plate{
             border:1px solid var(--line);
-            background:rgba(6,8,12,0.34);
-            padding:14px 16px;
-            border-radius:4px;
-        }
-
-        .plate-label {
-            font-size:10px;
-            text-transform:uppercase;
-            letter-spacing:0.18em;
-            color:#8d97a5;
-            margin-bottom:8px;
-        }
-
-        .plate-body {
-            font-size:13px;
-            line-height:1.65;
-            color:#d7dde6;
-        }
-
-        .metric {
-            border:1px solid var(--line);
-            background:linear-gradient(180deg, #151b23 0%, #10151c 100%);
-            border-radius:4px;
-            padding:16px 16px 14px 16px;
-            min-height:116px;
-        }
-
-        .metric-label {
-            font-size:10px;
-            text-transform:uppercase;
-            letter-spacing:0.18em;
-            color:#8d97a5;
-            margin-bottom:12px;
-        }
-
-        .metric-value {
-            font-size:30px;
-            line-height:1;
-            font-weight:800;
-            color:#ffffff;
-            margin-bottom:8px;
-        }
-
-        .metric-foot {
-            font-size:12px;
-            line-height:1.6;
-            color:#a5afbb;
-        }
-
-        .section {
-            border:1px solid var(--line);
-            background:linear-gradient(180deg, #131821 0%, #0f141b 100%);
-            border-radius:6px;
-            padding:16px 16px 14px 16px;
-        }
-
-        .section-title {
-            color:#ffffff;
-            font-size:14px;
-            font-weight:800;
-            text-transform:uppercase;
-            letter-spacing:0.12em;
-            margin-bottom:14px;
-        }
-
-        .action-box {
-            border:1px solid var(--line);
-            background:#0f141a;
-            border-left:3px solid #7d8898;
-            padding:14px 14px 13px 14px;
+            background:#0e1319;
             border-radius:3px;
-            min-height:176px;
+            padding: 14px 16px;
         }
 
-        .action-priority {
-            display:inline-block;
-            border:1px solid #404958;
-            padding:5px 8px;
-            border-radius:3px;
+        .plate-k{
             font-size:10px;
+            color: var(--muted);
             text-transform:uppercase;
             letter-spacing:0.16em;
-            color:#dde3ea;
-            margin-bottom:12px;
-        }
-
-        .action-title {
-            color:#ffffff;
-            font-size:16px;
-            font-weight:800;
-            line-height:1.35;
             margin-bottom:8px;
         }
 
-        .action-body {
-            color:#aeb7c3;
+        .plate-v{
             font-size:13px;
+            color:#dce3eb;
             line-height:1.7;
+        }
+
+        .control-wrap{
+            border:1px solid var(--line);
+            border-radius:4px;
+            background: linear-gradient(180deg, #121720 0%, #10141b 100%);
+            padding: 14px;
+            margin-bottom: 14px;
+        }
+
+        .section{
+            border:1px solid var(--line);
+            border-radius: 4px;
+            background: linear-gradient(180deg, #141a23 0%, #10151c 100%);
+            padding: 14px;
+        }
+
+        .section-title{
+            font-size: 12px;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: #dce2ea;
+            font-weight: 800;
+            margin-bottom: 12px;
+        }
+
+        .metric{
+            border:1px solid var(--line);
+            border-radius: 3px;
+            padding: 14px 14px 12px 14px;
+            background:#0f141b;
+            min-height:112px;
+        }
+
+        .metric-k{
+            font-size:10px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.16em;
+            margin-bottom: 11px;
+        }
+
+        .metric-v{
+            font-size: 30px;
+            line-height: 1;
+            font-weight: 850;
+            color: white;
+            margin-bottom: 8px;
+        }
+
+        .metric-f{
+            font-size: 12px;
+            line-height: 1.55;
+            color: var(--muted2);
+        }
+
+        .action{
+            border:1px solid var(--line);
+            border-left: 3px solid #6f7a89;
+            border-radius: 3px;
+            padding: 13px 13px 12px 13px;
+            background:#0e1319;
+            min-height: 168px;
+        }
+
+        .action-p{
+            display:inline-block;
+            border:1px solid var(--line2);
+            border-radius:3px;
+            padding: 5px 8px;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.16em;
+            color: #d7dde6;
+            margin-bottom: 11px;
+        }
+
+        .action-t{
+            font-size:16px;
+            line-height:1.35;
+            font-weight:800;
+            color:white;
+            margin-bottom:8px;
+        }
+
+        .action-b{
+            font-size:13px;
+            line-height:1.68;
+            color:var(--muted2);
             margin-bottom:10px;
         }
 
-        .action-next {
-            color:#dce3eb;
+        .action-n{
             font-size:12px;
             line-height:1.7;
-            padding-top:10px;
+            color:#dfe5ed;
             border-top:1px solid #252d39;
+            padding-top:10px;
         }
 
-        .signal-line {
-            border-bottom:1px solid #252d39;
+        .note{
+            font-size:12px;
+            line-height:1.7;
+            color:var(--muted);
+        }
+
+        .signal{
+            border-bottom:1px solid #262e39;
             padding:10px 0;
         }
+        .signal:last-child{border-bottom:none;}
 
-        .signal-line:last-child { border-bottom:none; }
-
-        .signal-name {
-            font-size:11px;
-            color:#8f99a7;
-            text-transform:uppercase;
+        .signal-k{
+            font-size:10px;
             letter-spacing:0.16em;
+            text-transform:uppercase;
+            color:var(--muted);
+            margin-bottom:5px;
+        }
+
+        .signal-v{
+            font-size:18px;
+            color:white;
+            font-weight:800;
             margin-bottom:4px;
         }
 
-        .signal-value {
-            color:#ffffff;
-            font-weight:700;
-            font-size:16px;
-            margin-bottom:4px;
-        }
-
-        .signal-note {
-            color:#a9b3bf;
+        .signal-f{
             font-size:12px;
-            line-height:1.6;
-        }
-
-        .small-note {
-            color:#8f99a7;
-            font-size:12px;
-            line-height:1.7;
+            line-height:1.65;
+            color:var(--muted2);
         }
 
         div[data-baseweb="tab-list"]{
-            gap:8px;
-            margin-top:2px;
-            margin-bottom:4px;
+            gap: 8px;
+            margin-top: 2px;
+            margin-bottom: 4px;
         }
 
         button[data-baseweb="tab"]{
             border-radius:3px;
             border:1px solid var(--line);
-            background:#10151c;
-            color:#d5dce5;
+            background:#11161d;
+            color:#d6dde6;
             padding:10px 14px;
         }
 
@@ -273,16 +290,42 @@ def inject_css() -> None:
             border-color:#434d5d;
         }
 
-        .stButton button, .stDownloadButton button {
+        .stButton button, .stDownloadButton button{
             border-radius:3px;
-            background:#161c24;
-            color:#ffffff;
-            border:1px solid #394350;
+            border:1px solid #3b4452;
+            background:#171d26;
+            color:white;
             font-weight:700;
         }
 
-        .stDataFrame, div[data-testid="stMetric"]{
-            border-radius:4px;
+        div[data-testid="stHorizontalBlock"] > div:has(.stTextInput), 
+        div[data-testid="stHorizontalBlock"] > div:has(.stSelectbox),
+        div[data-testid="stHorizontalBlock"] > div:has(.stNumberInput),
+        div[data-testid="stHorizontalBlock"] > div:has(.stRadio),
+        div[data-testid="stHorizontalBlock"] > div:has(.stFileUploader){
+            background: transparent;
+        }
+
+        div[data-baseweb="select"] > div,
+        .stTextInput input,
+        .stNumberInput input,
+        .stTextArea textarea{
+            background:#0f141b !important;
+            border:1px solid #313948 !important;
+            color:white !important;
+            border-radius:3px !important;
+        }
+
+        .stRadio [role="radiogroup"]{
+            flex-direction: row;
+            gap: 8px;
+        }
+
+        .stRadio label{
+            background:#0f141b;
+            border:1px solid #313948;
+            padding: 8px 10px;
+            border-radius: 3px;
         }
         </style>
         """,
@@ -290,6 +333,9 @@ def inject_css() -> None:
     )
 
 
+# --------------------------------------------------
+# Helpers
+# --------------------------------------------------
 def fmt_yen(v) -> str:
     if v is None or (isinstance(v, float) and math.isnan(v)):
         return "-"
@@ -302,20 +348,37 @@ def fmt_pct(v) -> str:
     return f"{v*100:.1f}%"
 
 
-def load_csv_from_url(url: str) -> pd.DataFrame:
-    text = requests.get(url, timeout=20).text
-    return pd.read_csv(io.StringIO(text))
+def card_metric(label: str, value: str, foot: str) -> None:
+    st.markdown(
+        f"""
+        <div class="metric">
+            <div class="metric-k">{label}</div>
+            <div class="metric-v">{value}</div>
+            <div class="metric-f">{foot}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
-def load_source(sheet_url: str, uploaded_file, fallback_df: pd.DataFrame) -> pd.DataFrame:
-    if uploaded_file is not None:
-        return pd.read_csv(uploaded_file)
-    if sheet_url.strip():
-        try:
-            return load_csv_from_url(sheet_url.strip())
-        except Exception:
-            return fallback_df.copy()
-    return fallback_df.copy()
+def card_action(priority: str, title: str, body: str, next_step: str) -> None:
+    st.markdown(
+        f"""
+        <div class="action">
+            <div class="action-p">{priority}</div>
+            <div class="action-t">{title}</div>
+            <div class="action-b">{body}</div>
+            <div class="action-n"><strong>NEXT</strong> {next_step}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def fetch_public_csv(url: str) -> pd.DataFrame:
+    resp = requests.get(url, timeout=20)
+    resp.raise_for_status()
+    return pd.read_csv(io.StringIO(resp.text))
 
 
 def demo_price_table() -> pd.DataFrame:
@@ -340,47 +403,66 @@ def demo_market_table() -> pd.DataFrame:
     ])
 
 
-def build_recommendation_table(price_df: pd.DataFrame, market_df: pd.DataFrame) -> pd.DataFrame:
+def load_inputs(mode: str, price_csv_url: str, market_csv_url: str, price_upload, market_upload) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    if mode == "DEMO":
+        return demo_price_table(), demo_market_table()
+
+    fallback_price = demo_price_table()
+    fallback_market = demo_market_table()
+
+    if price_upload is not None:
+        price_df = pd.read_csv(price_upload)
+    elif price_csv_url.strip():
+        price_df = fetch_public_csv(price_csv_url.strip())
+    else:
+        price_df = fallback_price
+
+    if market_upload is not None:
+        market_df = pd.read_csv(market_upload)
+    elif market_csv_url.strip():
+        market_df = fetch_public_csv(market_csv_url.strip())
+    else:
+        market_df = fallback_market
+
+    return price_df, market_df
+
+
+def recommend_prices(price_df: pd.DataFrame, market_df: pd.DataFrame) -> pd.DataFrame:
     df = price_df.merge(market_df, on="sku", how="left")
 
     df["cvr"] = np.where(df["sessions"] > 0, df["orders"] / df["sessions"], 0)
-    df["units_per_order"] = np.where(df["orders"] > 0, df["units"] / df["orders"], 1)
     df["margin_per_unit"] = df["current_price"] - df["cost"]
-    df["gross_margin_rate"] = np.where(df["current_price"] > 0, df["margin_per_unit"] / df["current_price"], 0)
+    df["margin_rate"] = np.where(df["current_price"] > 0, df["margin_per_unit"] / df["current_price"], 0)
 
     market_anchor = (
-        df["equilibrium_price"].fillna(df["current_price"]) * 0.60
-        + df["market_low"].fillna(df["current_price"]) * 0.10
-        + df["market_high"].fillna(df["current_price"]) * 0.10
+        df["equilibrium_price"].fillna(df["current_price"]) * 0.64
+        + df["market_low"].fillna(df["current_price"]) * 0.08
+        + df["market_high"].fillna(df["current_price"]) * 0.08
         + df["current_price"] * 0.20
     )
 
     elasticity_adj = np.where(
-        df["elasticity_proxy"].fillna(-0.5) <= -0.9,
-        -0.03 * df["current_price"],
-        np.where(df["elasticity_proxy"].fillna(-0.5) >= -0.45, 0.02 * df["current_price"], 0)
+        df["elasticity_proxy"].fillna(-0.5) <= -1.0, -0.04 * df["current_price"],
+        np.where(df["elasticity_proxy"].fillna(-0.5) <= -0.7, -0.015 * df["current_price"],
+                 np.where(df["elasticity_proxy"].fillna(-0.5) >= -0.4, 0.025 * df["current_price"], 0))
     )
 
-    stock_adj = np.where(df["stock"] < 40, 0.03 * df["current_price"], np.where(df["stock"] > 120, -0.02 * df["current_price"], 0))
-    margin_floor = df["cost"] / 0.62
+    stock_adj = np.where(
+        df["stock"] < 40, 0.04 * df["current_price"],
+        np.where(df["stock"] > 120, -0.025 * df["current_price"], 0)
+    )
 
-    raw_recommended = market_anchor + elasticity_adj + stock_adj
-    df["recommended_price"] = np.maximum(raw_recommended, margin_floor).round(-1)
+    traffic_adj = np.where(
+        (df["sessions"] > df["sessions"].median()) & (df["cvr"] < df["cvr"].median()),
+        -0.02 * df["current_price"], 0
+    )
+
+    floor_price = df["cost"] / 0.60
+    raw = market_anchor + elasticity_adj + stock_adj + traffic_adj
+    df["recommended_price"] = np.maximum(raw, floor_price).round(-1)
 
     df["price_delta"] = df["recommended_price"] - df["current_price"]
     df["price_delta_pct"] = np.where(df["current_price"] > 0, df["price_delta"] / df["current_price"], 0)
-
-    df["recommendation_reason"] = np.select(
-        [
-            df["price_delta_pct"] <= -0.03,
-            df["price_delta_pct"] >= 0.03,
-        ],
-        [
-            "市場均衡帯に対して上振れ。価格感応と在庫水準を踏まえ調整推奨。",
-            "現在価格に値上げ余地。粗利改善余地が残る。",
-        ],
-        default="価格は概ね妥当。画像・訴求・配送条件を優先改善。"
-    )
 
     df["recommended_action"] = np.select(
         [
@@ -391,132 +473,121 @@ def build_recommendation_table(price_df: pd.DataFrame, market_df: pd.DataFrame) 
             "PRICE_DOWN_TEST",
             "PRICE_UP_TEST",
         ],
-        default="HOLD_PRICE"
+        default="HOLD_PRICE",
+    )
+
+    df["reason"] = np.select(
+        [
+            df["recommended_action"] == "PRICE_DOWN_TEST",
+            df["recommended_action"] == "PRICE_UP_TEST",
+        ],
+        [
+            "競争密度・価格感応・流入効率の観点から下方向テストが妥当。",
+            "粗利と在庫制約の観点から上方向テスト余地あり。",
+        ],
+        default="価格は概ね妥当。画像・訴求・配送文言の改善を優先。",
     )
 
     return df
 
 
-def build_overview_kpis(rec_df: pd.DataFrame) -> Dict[str, float]:
-    total_revenue = rec_df["revenue"].sum()
-    total_profit = rec_df["gross_profit"].sum()
-    total_sessions = rec_df["sessions"].sum()
-    total_orders = rec_df["orders"].sum()
-    cvr = total_orders / total_sessions if total_sessions else 0
-    avg_delta = rec_df["price_delta_pct"].mean()
+def build_actions(df: pd.DataFrame):
+    out = []
+
+    down_df = df.sort_values("price_delta_pct")
+    up_df = df.sort_values("price_delta_pct", ascending=False)
+    low_stock_df = df.sort_values("stock")
+
+    if not down_df.empty:
+        x = down_df.iloc[0]
+        out.append({
+            "priority":"critical",
+            "title":f"{x['sku']} を下方向テスト",
+            "body":f"{x['product_name']} は現行 {fmt_yen(x['current_price'])} に対し推薦 {fmt_yen(x['recommended_price'])}。高流入なのに転換が弱く、相場対比でもやや上振れです。",
+            "next":"3%刻みで価格テスト。メイン画像と配送文言も同時に差し替え。",
+        })
+
+    if not up_df.empty:
+        x = up_df.iloc[0]
+        out.append({
+            "priority":"priority",
+            "title":f"{x['sku']} は値上げ余地あり",
+            "body":f"{x['product_name']} は現行 {fmt_yen(x['current_price'])}、推薦 {fmt_yen(x['recommended_price'])}。粗利回収を優先しても良い水準です。",
+            "next":"+2% から +4% の範囲で段階改定し、CVRの毀損を監視。",
+        })
+
+    if not low_stock_df.empty:
+        x = low_stock_df.iloc[0]
+        out.append({
+            "priority":"priority",
+            "title":f"{x['sku']} は在庫優先管理",
+            "body":f"{x['product_name']} の在庫は {int(x['stock'])}。欠品回避が価格最適化より先です。",
+            "next":"補充予定を確認し、必要なら価格を引き上げて需要を平準化。",
+        })
+
+    hold_df = df.iloc[(df["price_delta_pct"].abs()).argmin()]
+    out.append({
+        "priority":"advisory",
+        "title":f"{hold_df['sku']} は価格維持でよい",
+        "body":f"{hold_df['product_name']} は市場均衡とのズレが小さい商品です。ここは価格より訴求改善が効きます。",
+        "next":"価格は触らず、画像・レビュー獲得・送料無料条件を調整。",
+    })
+    return out[:4]
+
+
+def kpis(df: pd.DataFrame) -> Dict[str, float]:
+    revenue = float(df["revenue"].sum())
+    profit = float(df["gross_profit"].sum())
+    sessions = float(df["sessions"].sum())
+    orders = float(df["orders"].sum())
+    cvr = orders / sessions if sessions else 0
+    avg_delta = float(df["price_delta_pct"].mean())
     return {
-        "revenue": total_revenue,
-        "profit": total_profit,
-        "sessions": total_sessions,
-        "orders": total_orders,
+        "revenue": revenue,
+        "profit": profit,
+        "sessions": sessions,
+        "orders": orders,
         "cvr": cvr,
         "avg_delta": avg_delta,
     }
 
 
-def build_actions(rec_df: pd.DataFrame):
-    actions = []
-    down = rec_df.sort_values("price_delta_pct").head(2)
-    up = rec_df.sort_values("price_delta_pct", ascending=False).head(2)
-
-    if len(down):
-        sku = down.iloc[0]
-        actions.append({
-            "priority":"critical",
-            "title": f"{sku['sku']} を即テスト対象へ",
-            "body": f"{sku['product_name']} は現行 {fmt_yen(sku['current_price'])} に対し推薦 {fmt_yen(sku['recommended_price'])}。価格感応と競争密度の観点で取りこぼしが疑われます。",
-            "next": "3%刻みの価格テストと、メイン画像差し替えを同時実施。",
-        })
-    if len(up):
-        sku = up.iloc[0]
-        actions.append({
-            "priority":"priority",
-            "title": f"{sku['sku']} は値上げ余地あり",
-            "body": f"{sku['product_name']} は現行 {fmt_yen(sku['current_price'])} に対し推薦 {fmt_yen(sku['recommended_price'])}。粗利改善余地が見込めます。",
-            "next": "CVRが崩れない範囲で +2〜4% の段階改定。",
-        })
-
-    low_stock = rec_df.sort_values("stock").head(1).iloc[0]
-    actions.append({
-        "priority":"priority",
-        "title": f"在庫監視 SKU: {low_stock['sku']}",
-        "body": f"{low_stock['product_name']} は在庫 {int(low_stock['stock'])}。価格改定より欠品回避を優先すべき水準です。",
-        "next": "価格を上げて需要を平準化するか、補充計画を前倒し。",
-    })
-
-    hold = rec_df.iloc[(rec_df["price_delta_pct"].abs()).argmin()]
-    actions.append({
-        "priority":"advisory",
-        "title": f"{hold['sku']} は価格維持判断",
-        "body": f"{hold['product_name']} は市場均衡帯と概ね整合。ここは値段よりも画像・レビュー・配送文言の改善が効きます。",
-        "next": "価格は保持し、転換率改善のテストへ回す。",
-    })
-    return actions[:4]
-
-
-def metric_card(label: str, value: str, foot: str):
-    st.markdown(
-        f"""
-        <div class="metric">
-          <div class="metric-label">{label}</div>
-          <div class="metric-value">{value}</div>
-          <div class="metric-foot">{foot}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def action_card(item: Dict[str, str]):
-    st.markdown(
-        f"""
-        <div class="action-box">
-          <div class="action-priority">{item['priority']}</div>
-          <div class="action-title">{item['title']}</div>
-          <div class="action-body">{item['body']}</div>
-          <div class="action-next"><strong>NEXT</strong> {item['next']}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def price_delta_chart(rec_df: pd.DataFrame):
-    chart_df = rec_df.sort_values("price_delta_pct")
+def chart_price_delta(df: pd.DataFrame) -> go.Figure:
+    x = df.sort_values("price_delta_pct")
     fig = go.Figure()
     fig.add_trace(go.Bar(
-        x=chart_df["sku"],
-        y=chart_df["price_delta_pct"] * 100,
-        text=[f"{x*100:.1f}%" for x in chart_df["price_delta_pct"]],
+        x=x["sku"],
+        y=x["price_delta_pct"] * 100,
+        text=[f"{v*100:.1f}%" for v in x["price_delta_pct"]],
         textposition="outside",
-        marker_color="#9aa4b2",
+        marker_color="#AEB6C0",
+        hovertemplate="%{x}<br>%{y:.1f}%<extra></extra>",
     ))
     fig.update_layout(
-        title="Recommended Price Delta by SKU",
+        title="Recommended Price Delta",
         template="plotly_dark",
-        height=340,
+        height=320,
+        margin=dict(l=20, r=20, t=48, b=20),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        margin=dict(l=20, r=20, t=50, b=20),
         xaxis_title="SKU",
-        yaxis_title="% vs Current Price",
+        yaxis_title="% vs current",
     )
     return fig
 
 
-def revenue_profit_chart(rec_df: pd.DataFrame):
-    chart_df = rec_df.copy()
+def chart_revenue_profit(df: pd.DataFrame) -> go.Figure:
     fig = go.Figure()
-    fig.add_trace(go.Bar(name="Revenue", x=chart_df["sku"], y=chart_df["revenue"]))
-    fig.add_trace(go.Bar(name="Gross Profit", x=chart_df["sku"], y=chart_df["gross_profit"]))
+    fig.add_trace(go.Bar(name="Revenue", x=df["sku"], y=df["revenue"], marker_color="#8C96A3"))
+    fig.add_trace(go.Bar(name="Gross Profit", x=df["sku"], y=df["gross_profit"], marker_color="#C3CAD4"))
     fig.update_layout(
         barmode="group",
+        title="Revenue / Gross Profit",
         template="plotly_dark",
-        title="Revenue / Gross Profit by SKU",
         height=340,
+        margin=dict(l=20, r=20, t=48, b=20),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        margin=dict(l=20, r=20, t=50, b=20),
     )
     return fig
 
@@ -525,177 +596,215 @@ inject_css()
 
 st.markdown(
     """
-    <div class="hero">
-      <div class="hero-top">
-        <div class="hero-badge">ASTRO / RMS 2.0 CONSOLE</div>
-        <div class="hero-badge">TACTICAL OPERATIONS PANEL</div>
-      </div>
-      <div class="hero-grid">
-        <div>
-          <div class="hero-title">価格、客足、利益を<br>一つの操作盤に集約する。</div>
-          <div class="hero-sub">
-            これは市場俯瞰BIではなく、アストロ向けの軽量RMSを意識した運用画面です。
-            商品ごとの現行価格、推薦価格、売上、客足、利益、在庫、競争密度を束ね、
-            最後は「何をどう触るか」だけを前面に出します。
-          </div>
+    <div class="topbar">
+        <div class="topbar-left">
+            <div class="topbar-chip">ASTRO / OPS CONSOLE</div>
+            <div class="topbar-chip">PRICE · TRAFFIC · PROFIT · STOCK</div>
         </div>
-        <div class="hero-plate">
-          <div class="plate-label">Operational Doctrine</div>
-          <div class="plate-body">
-            価格推薦は単発計算ではなく、履歴の蓄積からしか精度が出ません。
-            したがって、この種の画面には最低限のデータベースが必要です。
-            無料で始めるなら、まずは Google Sheets をテーブル代わりに使うのが最も速いです。
-          </div>
+        <div class="topbar-left">
+            <div class="topbar-chip">RMS 2.0 PROTOTYPE</div>
         </div>
-      </div>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-with st.sidebar:
-    st.markdown("### Data Source")
-    mode = st.radio("source mode", ["DEMO", "CSV / SHEETS"], index=0)
+st.markdown(
+    """
+    <div class="hero">
+        <div class="hero-grid">
+            <div>
+                <div class="hero-title">BIではなく、<br>運用判断のための操作盤。</div>
+                <div class="hero-sub">
+                    価格均衡、市場感応、客足、粗利、在庫を束ねて、SKUごとに推薦価格と次の操作を返す。
+                    目的は可視化ではなく、<strong>毎日触れる運用画面</strong> にすることです。
+                </div>
+            </div>
+            <div class="plate">
+                <div class="plate-k">Data ingress doctrine</div>
+                <div class="plate-v">
+                    公開CSVなら Google API は不要です。<br>
+                    非公開のまま読むなら OAuth 2.0 かサービスアカウントが必要です。<br>
+                    初期は <strong>Google Sheets をCSV公開</strong> して接続し、後で private 接続へ移るのが最速です。
+                </div>
+            </div>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
-    price_sheet_url = st.text_input("price table csv url", value="", help="Google Sheets を CSV 公開したURLを想定")
-    market_sheet_url = st.text_input("market table csv url", value="", help="Google Sheets を CSV 公開したURLを想定")
-    price_upload = st.file_uploader("price table csv", type=["csv"])
-    market_upload = st.file_uploader("market table csv", type=["csv"])
+with st.container():
+    st.markdown('<div class="control-wrap">', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Connection / Input</div>', unsafe_allow_html=True)
 
-    run = st.button("RUN CONSOLE", use_container_width=True)
+    with st.form("control_form"):
+        c1, c2, c3 = st.columns([1.1, 1.2, 1.2])
+        with c1:
+            mode = st.radio("data mode", ["DEMO", "PUBLIC CSV / UPLOAD"], index=0, horizontal=True)
+        with c2:
+            price_csv_url = st.text_input("price table csv url", value="", placeholder="https://docs.google.com/...output=csv")
+        with c3:
+            market_csv_url = st.text_input("market table csv url", value="", placeholder="https://docs.google.com/...output=csv")
 
-tabs = st.tabs(["Control Board", "Price Recommendations", "Operations Ledger", "Data Model"])
+        u1, u2, u3 = st.columns([1, 1, 0.55])
+        with u1:
+            price_upload = st.file_uploader("price table csv", type=["csv"], key="price_upload")
+        with u2:
+            market_upload = st.file_uploader("market table csv", type=["csv"], key="market_upload")
+        with u3:
+            submitted = st.form_submit_button("RUN CONSOLE", use_container_width=True)
 
-if run:
-    if mode == "CSV / SHEETS":
-        price_df = load_source(price_sheet_url, price_upload, demo_price_table())
-        market_df = load_source(market_sheet_url, market_upload, demo_market_table())
-    else:
-        price_df = demo_price_table()
-        market_df = demo_market_table()
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    rec_df = build_recommendation_table(price_df, market_df)
-    kpis = build_overview_kpis(rec_df)
+tabs = st.tabs(["Control Board", "Recommendation Ledger", "Data Architecture"])
+
+if submitted:
+    price_df, market_df = load_inputs(mode, price_csv_url, market_csv_url, price_upload, market_upload)
+    rec_df = recommend_prices(price_df, market_df)
+    summary = kpis(rec_df)
     actions = build_actions(rec_df)
 
     with tabs[0]:
-        c1, c2, c3, c4, c5 = st.columns(5)
-        with c1:
-            metric_card("Revenue", fmt_yen(kpis["revenue"]), "対象SKU群の売上合計")
-        with c2:
-            metric_card("Gross Profit", fmt_yen(kpis["profit"]), "粗利合計")
-        with c3:
-            metric_card("Sessions", f"{int(kpis['sessions']):,}", "流入合計")
-        with c4:
-            metric_card("CVR", f"{kpis['cvr']*100:.2f}%", "注文 / セッション")
-        with c5:
-            metric_card("Avg Price Delta", fmt_pct(kpis["avg_delta"]), "推薦価格の平均差分")
+        r1, r2, r3, r4, r5 = st.columns(5)
+        with r1:
+            card_metric("Revenue", fmt_yen(summary["revenue"]), "対象SKU群の売上合計")
+        with r2:
+            card_metric("Gross Profit", fmt_yen(summary["profit"]), "粗利合計")
+        with r3:
+            card_metric("Sessions", f"{int(summary['sessions']):,}", "流入合計")
+        with r4:
+            card_metric("CVR", f"{summary['cvr']*100:.2f}%", "注文 / セッション")
+        with r5:
+            card_metric("Avg Price Delta", fmt_pct(summary["avg_delta"]), "推薦価格の平均差分")
 
-        st.markdown("#### Tactical Actions")
+        st.markdown("")
+        st.markdown('<div class="section">', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Recommended Operations</div>', unsafe_allow_html=True)
         cols = st.columns(4)
         for col, item in zip(cols, actions):
             with col:
-                action_card(item)
+                card_action(item["priority"], item["title"], item["body"], item["next"])
+        st.markdown('</div>', unsafe_allow_html=True)
 
-        st.markdown("#### Mission Signals")
-        left, right = st.columns([1, 1.2])
-        with left:
+        st.markdown("")
+        s1, s2 = st.columns([0.95, 1.25])
+        with s1:
             st.markdown('<div class="section">', unsafe_allow_html=True)
             st.markdown('<div class="section-title">Signal Summary</div>', unsafe_allow_html=True)
+
+            down_cnt = int((rec_df["recommended_action"] == "PRICE_DOWN_TEST").sum())
+            up_cnt = int((rec_df["recommended_action"] == "PRICE_UP_TEST").sum())
+            low_stock_cnt = int((rec_df["stock"] < 40).sum())
+            hold_cnt = int((rec_df["recommended_action"] == "HOLD_PRICE").sum())
+
             st.markdown(
                 f"""
-                <div class="signal-line">
-                  <div class="signal-name">price down candidates</div>
-                  <div class="signal-value">{int((rec_df['recommended_action'] == 'PRICE_DOWN_TEST').sum())}</div>
-                  <div class="signal-note">市場均衡に対して上振れているSKU数</div>
+                <div class="signal">
+                    <div class="signal-k">price down candidates</div>
+                    <div class="signal-v">{down_cnt}</div>
+                    <div class="signal-f">均衡対比で価格がやや上振れているSKU数</div>
                 </div>
-                <div class="signal-line">
-                  <div class="signal-name">price up candidates</div>
-                  <div class="signal-value">{int((rec_df['recommended_action'] == 'PRICE_UP_TEST').sum())}</div>
-                  <div class="signal-note">粗利改善余地が残るSKU数</div>
+                <div class="signal">
+                    <div class="signal-k">price up candidates</div>
+                    <div class="signal-v">{up_cnt}</div>
+                    <div class="signal-f">値上げ余地が残るSKU数</div>
                 </div>
-                <div class="signal-line">
-                  <div class="signal-name">low stock units</div>
-                  <div class="signal-value">{int((rec_df['stock'] < 40).sum())}</div>
-                  <div class="signal-note">欠品警戒SKU数</div>
+                <div class="signal">
+                    <div class="signal-k">hold price candidates</div>
+                    <div class="signal-v">{hold_cnt}</div>
+                    <div class="signal-f">価格より訴求改善を優先すべきSKU数</div>
+                </div>
+                <div class="signal">
+                    <div class="signal-k">low stock watch</div>
+                    <div class="signal-v">{low_stock_cnt}</div>
+                    <div class="signal-f">欠品回避を優先すべきSKU数</div>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
             st.markdown('</div>', unsafe_allow_html=True)
-        with right:
-            st.plotly_chart(price_delta_chart(rec_df), use_container_width=True)
+
+        with s2:
+            st.plotly_chart(chart_price_delta(rec_df), use_container_width=True)
 
     with tabs[1]:
-        table = rec_df[[
-            "sku","product_name","current_price","recommended_price","price_delta","price_delta_pct",
-            "revenue","gross_profit","sessions","orders","stock",
-            "equilibrium_price","elasticity_proxy","competition_density",
-            "recommended_action","recommendation_reason"
-        ]].copy()
-        table["price_delta_pct"] = table["price_delta_pct"].map(lambda x: f"{x*100:.1f}%")
-        st.dataframe(table, use_container_width=True, hide_index=True)
+        left, right = st.columns([1.3, 1.0])
 
-        csv = rec_df.to_csv(index=False).encode("utf-8-sig")
-        st.download_button("EXPORT RECOMMENDATIONS CSV", data=csv, file_name="astro_rms20_recommendations.csv", mime="text/csv")
-
-    with tabs[2]:
-        left, right = st.columns(2)
         with left:
-            st.plotly_chart(revenue_profit_chart(rec_df), use_container_width=True)
+            ledger = rec_df[[
+                "sku","product_name","current_price","recommended_price","price_delta","price_delta_pct",
+                "revenue","gross_profit","sessions","orders","stock",
+                "equilibrium_price","elasticity_proxy","competition_density","recommended_action","reason"
+            ]].copy()
+            ledger["price_delta_pct"] = ledger["price_delta_pct"].map(lambda x: f"{x*100:.1f}%")
+            st.dataframe(ledger, use_container_width=True, hide_index=True)
+
+            csv = rec_df.to_csv(index=False).encode("utf-8-sig")
+            st.download_button(
+                "EXPORT RECOMMENDATION LEDGER",
+                data=csv,
+                file_name="astro_ops_console_recommendations.csv",
+                mime="text/csv",
+            )
+
         with right:
+            st.plotly_chart(chart_revenue_profit(rec_df), use_container_width=True)
             st.markdown('<div class="section">', unsafe_allow_html=True)
-            st.markdown('<div class="section-title">Operational Interpretation</div>', unsafe_allow_html=True)
+            st.markdown('<div class="section-title">Operational note</div>', unsafe_allow_html=True)
             st.markdown(
                 """
-                <div class="small-note">
-                この画面は BI より一段運用寄りです。<br><br>
-                必要なのは単なる市場価格ではなく、SKUごとの<br>
-                ・現行価格<br>
-                ・売上<br>
-                ・客足（セッション）<br>
-                ・注文数 / CVR<br>
-                ・粗利<br>
-                ・在庫<br>
-                ・競合均衡価格<br>
-                の履歴です。<br><br>
-                これらを持って初めて、推薦価格が「単なる相場追随」ではなく、
-                自店の利益関数を踏まえた判断になります。
+                <div class="note">
+                推薦価格は市場価格だけで決めていません。<br><br>
+                均衡価格に対して、価格感応、在庫制約、流入効率、粗利下限を加味しています。<br><br>
+                そのため、この画面は可視化ツールというより、<strong>価格運用とSKU運用の管制盤</strong> に近い設計です。
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
             st.markdown('</div>', unsafe_allow_html=True)
 
-    with tabs[3]:
-        st.markdown("#### Minimum Tables")
-        schema_df = pd.DataFrame([
-            {"table":"sku_master","purpose":"商品マスタ","key columns":"sku, product_name, category, cost, listing_url"},
-            {"table":"daily_kpi","purpose":"日次実績","key columns":"date, sku, price, sessions, orders, units, revenue, gross_profit"},
-            {"table":"market_snapshot","purpose":"市場均衡観測","key columns":"date, sku, keyword, equilibrium_price, market_low, market_high, elasticity_proxy, competition_density"},
-            {"table":"inventory_snapshot","purpose":"在庫記録","key columns":"date, sku, stock, inbound_qty"},
-            {"table":"recommendation_log","purpose":"推薦履歴","key columns":"date, sku, current_price, recommended_price, action, reason"},
+    with tabs[2]:
+        st.markdown('<div class="section">', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Minimum free architecture</div>', unsafe_allow_html=True)
+
+        schema = pd.DataFrame([
+            {"table":"sku_master","role":"商品マスタ","columns":"sku, product_name, category, cost"},
+            {"table":"daily_kpi","role":"日次運用実績","columns":"date, sku, price, sessions, orders, units, revenue, gross_profit"},
+            {"table":"market_snapshot","role":"市場均衡観測","columns":"date, sku, equilibrium_price, market_low, market_high, elasticity_proxy, competition_density"},
+            {"table":"inventory_snapshot","role":"在庫記録","columns":"date, sku, stock"},
+            {"table":"recommendation_log","role":"推薦履歴","columns":"date, sku, current_price, recommended_price, action, reason"},
         ])
-        st.dataframe(schema_df, use_container_width=True, hide_index=True)
+        st.dataframe(schema, use_container_width=True, hide_index=True)
 
         st.markdown(
             """
-            **Google Sheets で始める場合**  
-            1つのスプレッドシートの中に、`sku_master` `daily_kpi` `market_snapshot` `inventory_snapshot` `recommendation_log`
-            を別タブで持つだけで始められます。  
-
-            **このコードの使い方**  
-            CSVをアップロードするか、Google Sheets を「CSV公開URL」にして読み込ませます。  
-            最初は価格推薦の確認画面として使い、あとから自動取得へ寄せる想定です。
-            """
+            <div class="note">
+            <strong>初期の最適解</strong><br>
+            1冊の Google Sheets の中に上の5シートを作り、必要なタブだけ CSV 公開してこの画面に読む。<br><br>
+            <strong>Google API が不要なケース</strong><br>
+            公開されたCSVリンクを読むだけのとき。通常のHTTP取得で足ります。<br><br>
+            <strong>Google API が必要なケース</strong><br>
+            非公開シートを読みたいとき、書き戻したいとき、ユーザー権限を保ったまま操作したいとき。<br><br>
+            <strong>運用のすすめ方</strong><br>
+            まずは Sheets で価格推薦ロジックを固める。次に private 化や自動更新が必要になった段階で Sheets API または Apps Script Web App へ移行する。
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
+        st.markdown('</div>', unsafe_allow_html=True)
+
 else:
     with tabs[0]:
+        st.markdown('<div class="section">', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Ready state</div>', unsafe_allow_html=True)
         st.markdown(
             """
-            #### What this should become
-
-            これは市場レーダーではなく、**価格推薦リストを出す軽量RMS** の入口です。  
-            まずは `DEMO` で実行し、次に Google Sheets の CSV をつないで実データへ差し替えるのが最短です。
-            """
+            <div class="note">
+            これはサイドバー中心の古い管理画面ではなく、上部コマンドバー型の運用画面です。<br><br>
+            まずは <strong>DEMO</strong> で見た目と操作感を確認し、その後 Google Sheets の公開CSVか実CSVを接続してください。
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
+        st.markdown('</div>', unsafe_allow_html=True)
